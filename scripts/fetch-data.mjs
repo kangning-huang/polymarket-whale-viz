@@ -25,7 +25,7 @@ const PRICES_DIR = join(DATA_DIR, 'prices');
 const config = JSON.parse(readFileSync(join(__dirname, 'traders.json'), 'utf-8'));
 const { traders, coins, refTs, windowSec, lookbackHours } = config;
 const windowDurations = config.windowDurations || [windowSec];
-const DURATION_LABELS = { 900: '15m', 300: '5m' };
+const DURATION_LABELS = { 900: '15m', 300: '5m', 3600: '1h' };
 
 const DELAY_MS = 100;
 const REQUEST_TIMEOUT = 8000;

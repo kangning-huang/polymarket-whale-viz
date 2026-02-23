@@ -17,11 +17,20 @@
       "profileUrl": "https://polymarket.com/@abrak25",
       "screenshot": "abrak25_pnl.png",
       "durations": [300]
+    },
+    {
+      "address": "0x63ce342161250d705dc0b16df89036c8e5f9ba9a",
+      "name": "0x8dxd",
+      "color": "#a855f7",
+      "description": "Hourly crypto market trader. Trades BTC, ETH, SOL, XRP on 1-hour prediction windows.",
+      "profileUrl": "https://polymarket.com/@0x8dxd",
+      "screenshot": "",
+      "durations": [3600]
     }
   ],
   "coins": ["btc", "eth", "sol", "xrp"],
   "refTs": 1770435000,
-  "windowDurations": [900, 300],
+  "windowDurations": [900, 300, 3600],
   "windowSec": 900,
   "lookbackHours": 24
 }
