@@ -16,9 +16,9 @@ export default function Comments({ botName }: Props) {
     const script = document.createElement('script');
     script.src = 'https://giscus.app/client.js';
     script.setAttribute('data-repo', 'kangning-huang/polymarket-whale-viz');
-    script.setAttribute('data-repo-id', ''); // Will be filled when Discussions enabled
+    script.setAttribute('data-repo-id', 'R_kgDORWdvrw');
     script.setAttribute('data-category', 'General');
-    script.setAttribute('data-category-id', ''); // Will be filled when Discussions enabled
+    script.setAttribute('data-category-id', 'DIC_kwDORWdvr84C3B0m');
     script.setAttribute('data-mapping', 'specific');
     script.setAttribute('data-term', `Bot: ${botName}`);
     script.setAttribute('data-strict', '0');
