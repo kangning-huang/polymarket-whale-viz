@@ -19,14 +19,11 @@ export default class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.error) {
       return (
-        <div style={{
-          background: '#1c1010', border: '1px solid #f85149',
-          borderRadius: 8, padding: 16, margin: 16, color: '#f85149',
-          fontFamily: 'monospace', fontSize: 13, whiteSpace: 'pre-wrap',
-        }}>
+        <div className="bg-short/10 border border-short/30 rounded-xl p-4 m-4 text-short font-mono text-sm whitespace-pre-wrap">
           <strong>Error{this.props.fallback ? ` in ${this.props.fallback}` : ''}:</strong>
           <br />{this.state.error.message}
-          <br /><br />{this.state.error.stack}
+          <br /><br />
+          <span className="text-text-muted text-xs">{this.state.error.stack}</span>
         </div>
       );
     }

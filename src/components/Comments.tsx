@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { motion } from 'framer-motion';
 
 interface Props {
   botName: string;
@@ -31,12 +32,20 @@ export default function Comments({ botName }: Props) {
   }, [botName]);
 
   return (
-    <div className="comments-section">
-      <h3 className="chart-title">Discussion</h3>
-      <p className="comments-hint">
-        What strategy is this bot using? Share your analysis below.
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3 }}
+      className="bg-surface border border-border rounded-xl p-6"
+    >
+      <h3 className="font-semibold text-text-primary mb-2 flex items-center gap-2">
+        <span className="text-accent">💬</span>
+        Discussion
+      </h3>
+      <p className="text-sm text-text-muted mb-4">
+        What strategy is this bot using? Share your analysis and debate with others below.
       </p>
-      <div id="disqus_thread" />
-    </div>
+      <div id="disqus_thread" className="min-h-[200px]" />
+    </motion.div>
   );
 }
