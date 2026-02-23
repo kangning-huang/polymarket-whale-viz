@@ -5,8 +5,11 @@ import {
   LinearScale,
   PointElement,
   LineElement,
+  LineController,
+  ScatterController,
   Tooltip,
   Legend,
+  Filler,
 } from 'chart.js';
 import annotationPlugin from 'chartjs-plugin-annotation';
 import { Chart } from 'react-chartjs-2';
@@ -17,8 +20,11 @@ ChartJS.register(
   LinearScale,
   PointElement,
   LineElement,
+  LineController,
+  ScatterController,
   Tooltip,
   Legend,
+  Filler,
   annotationPlugin
 );
 
