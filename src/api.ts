@@ -8,7 +8,16 @@ export async function fetchManifest(): Promise<Manifest> {
   return res.json();
 }
 
-export async function fetchWindowDetail(windowTs: number, coin: string): Promise<WindowDetail> {
+const DURATION_LABELS: Record<number, string> = { 900: '15m', 300: '5m' };
+
+export async function fetchWindowDetail(windowTs: number, coin: string, duration?: number): Promise<WindowDetail> {
+  // Try duration-labeled filename first, fall back to legacy
+  const label = duration ? DURATION_LABELS[duration] || `${duration}s` : null;
+  if (label) {
+    const res = await fetch(`${BASE}data/windows/${windowTs}_${coin}_${label}.json`);
+    if (res.ok) return res.json();
+  }
+  // Legacy fallback (15m windows without label)
   const res = await fetch(`${BASE}data/windows/${windowTs}_${coin}.json`);
   if (!res.ok) throw new Error(`Failed to load window ${windowTs}_${coin}: ${res.status}`);
   return res.json();

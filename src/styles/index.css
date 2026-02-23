@@ -391,6 +391,29 @@ body {
   color: var(--orange);
 }
 
+/* Collapsible sections */
+.collapsible-header {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collapsible-header:hover {
+  color: var(--accent);
+}
+
+.collapse-arrow {
+  font-size: 10px;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+
+.collapse-arrow.open {
+  transform: rotate(90deg);
+}
+
 /* Window Grid */
 .window-grid {
   display: grid;

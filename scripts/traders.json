@@ -19,6 +19,7 @@
   ],
   "coins": ["btc", "eth", "sol", "xrp"],
   "refTs": 1770435000,
+  "windowDurations": [900, 300],
   "windowSec": 900,
   "lookbackHours": 24
 }

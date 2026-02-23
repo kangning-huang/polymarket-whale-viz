@@ -35,11 +35,12 @@ interface Props {
   trades: Trade[];
   settlement: { winner: string; upPrice: number; downPrice: number };
   coin: string;
+  duration?: number;
   showRolling10?: boolean;
   showRolling30?: boolean;
 }
 
-export default function PriceChart({ prices, trades, settlement, coin, showRolling10, showRolling30 }: Props) {
+export default function PriceChart({ prices, trades, settlement, coin, duration, showRolling10, showRolling30 }: Props) {
   const theme = useThemeColors();
   const hasDenseData = prices.length > 100;
   const hasBidAsk = prices.some(p => p.bid != null && p.ask != null);
@@ -54,8 +55,14 @@ export default function PriceChart({ prices, trades, settlement, coin, showRolli
   );
 
   const data = useMemo(() => {
-    const buys = trades.filter(t => t.side === 'BUY');
-    const sells = trades.filter(t => t.side === 'SELL');
+    // Long = effectively betting price goes UP (buy Up shares OR sell Down shares)
+    // Short = effectively betting price goes DOWN (sell Up shares OR buy Down shares)
+    const longs = trades.filter(t =>
+      (t.side === 'BUY' && t.outcome === 'Up') || (t.side === 'SELL' && t.outcome === 'Down')
+    );
+    const shorts = trades.filter(t =>
+      (t.side === 'SELL' && t.outcome === 'Up') || (t.side === 'BUY' && t.outcome === 'Down')
+    );
 
     const datasets: any[] = [];
 
@@ -138,36 +145,38 @@ export default function PriceChart({ prices, trades, settlement, coin, showRolli
       });
     }
 
-    // Trade scatter points
+    // Trade scatter points (Long/Short on the Up outcome)
     datasets.push({
       type: 'scatter' as const,
-      label: 'Buy',
-      data: buys.map(t => ({
+      label: `Long ${coin.toUpperCase()}-Up`,
+      data: longs.map(t => ({
         x: t.sec,
         y: t.price * 100,
         tokens: t.tokens,
         usdc: t.usdc,
         outcome: t.outcome,
+        side: t.side,
       })),
       backgroundColor: theme.green,
       borderColor: theme.green,
-      pointRadius: buys.map(t => Math.max(3, Math.min(8, t.tokens / 5))),
+      pointRadius: longs.map(t => Math.max(3, Math.min(8, t.tokens / 5))),
       order: 1,
     });
 
     datasets.push({
       type: 'scatter' as const,
-      label: 'Sell',
-      data: sells.map(t => ({
+      label: `Short ${coin.toUpperCase()}-Up`,
+      data: shorts.map(t => ({
         x: t.sec,
         y: t.price * 100,
         tokens: t.tokens,
         usdc: t.usdc,
         outcome: t.outcome,
+        side: t.side,
       })),
       backgroundColor: theme.red,
       borderColor: theme.red,
-      pointRadius: sells.map(t => Math.max(3, Math.min(8, t.tokens / 5))),
+      pointRadius: shorts.map(t => Math.max(3, Math.min(8, t.tokens / 5))),
       order: 1,
     });
 
@@ -185,10 +194,10 @@ export default function PriceChart({ prices, trades, settlement, coin, showRolli
       x: {
         type: 'linear' as const,
         min: 0,
-        max: 900,
+        max: duration || 900,
         ticks: {
           color: theme.textSecondary,
-          stepSize: 60,
+          stepSize: (duration || 900) <= 300 ? 30 : 60,
           callback: (val: number | string) => {
             const v = Number(val);
             const m = Math.floor(v / 60);
@@ -220,7 +229,7 @@ export default function PriceChart({ prices, trades, settlement, coin, showRolli
           label: (ctx: any) => {
             const raw = ctx.raw;
             if (raw.tokens !== undefined) {
-              return `${ctx.dataset.label} ${raw.outcome}: ${raw.tokens.toFixed(1)} tokens @ $${(raw.y / 100).toFixed(3)} ($${raw.usdc.toFixed(2)})`;
+              return `${raw.side} ${raw.outcome}: ${raw.tokens.toFixed(1)} tokens @ $${(raw.y / 100).toFixed(3)} ($${raw.usdc.toFixed(2)})`;
             }
             return `${ctx.dataset.label}: ${raw.y.toFixed(1)}c`;
           },
@@ -249,14 +258,20 @@ export default function PriceChart({ prices, trades, settlement, coin, showRolli
     },
   }), [settlement, theme]);
 
+  const coinUp = `${coin.toUpperCase()}-Up`;
+
   return (
     <div className="chart-box">
       <h3 className="chart-title">
-        {coin.toUpperCase()}-UP Price & Trades
+        {coinUp} Price & Trades
         {hasDenseData && <span style={{ color: 'var(--text-secondary)', fontWeight: 400, fontSize: 12, marginLeft: 8 }}>
           ({prices.length} price points)
         </span>}
       </h3>
+      <p style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 8, lineHeight: 1.5 }}>
+        <span style={{ color: 'var(--green)', fontWeight: 600 }}>Long {coinUp}</span> = Buy Up shares or Sell Down shares.{' '}
+        <span style={{ color: 'var(--red)', fontWeight: 600 }}>Short {coinUp}</span> = Sell Up shares or Buy Down shares.
+      </p>
       <div className="chart-wrapper">
         <Chart type="scatter" data={data} options={options} />
       </div>

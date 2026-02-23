@@ -13,36 +13,54 @@ interface Props {
 }
 
 export default function BotPage({ bot, manifest }: Props) {
-  // Derive windows containing this bot, sorted newest first
-  const botWindows = useMemo(() => {
-    const seen = new Set<number>();
+  const MIN_PRICE_POINTS = 100;
+  const DURATION_LABELS: Record<number, string> = { 900: '15m', 300: '5m' };
+
+  // Derive unique window slots (ts + duration) containing this bot with dense data
+  const windowSlots = useMemo(() => {
+    const seen = new Set<string>();
     return manifest.windows
-      .filter(w => w.traders.some(t => t.name === bot.name))
-      .filter(w => {
-        if (seen.has(w.windowTs)) return false;
-        seen.add(w.windowTs);
-        return true;
-      })
-      .sort((a, b) => b.windowTs - a.windowTs);
+      .filter(w =>
+        w.traders.some(t => t.name === bot.name) &&
+        (w.priceCount == null || w.priceCount >= MIN_PRICE_POINTS)
+      )
+      .reduce<{ ts: number; duration: number }[]>((acc, w) => {
+        const dur = w.duration ?? 900;
+        const key = `${w.windowTs}_${dur}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          acc.push({ ts: w.windowTs, duration: dur });
+        }
+        return acc;
+      }, [])
+      .sort((a, b) => b.ts - a.ts);
   }, [manifest.windows, bot.name]);
 
-  // All unique window timestamps
-  const windowTimestamps = useMemo(
-    () => [...new Set(botWindows.map(w => w.windowTs))].sort((a, b) => b - a),
-    [botWindows]
+  // For summary stats, use all windows with this bot (any duration)
+  const botWindows = useMemo(() =>
+    manifest.windows.filter(w => w.traders.some(t => t.name === bot.name)),
+    [manifest.windows, bot.name]
   );
 
-  const [selectedWindow, setSelectedWindow] = useState<number | null>(
-    windowTimestamps[0] ?? null
+  const [selectedSlot, setSelectedSlot] = useState<string>(
+    windowSlots.length > 0 ? `${windowSlots[0].ts}_${windowSlots[0].duration}` : ''
   );
 
-  // Coins available for selected window
+  const selectedWindow = selectedSlot ? Number(selectedSlot.split('_')[0]) : null;
+  const selectedDuration = selectedSlot ? Number(selectedSlot.split('_')[1]) : 900;
+
+  // Coins available for selected window+duration (only those with dense data)
   const availableCoins = useMemo(() => {
     if (!selectedWindow) return [];
     return manifest.windows
-      .filter(w => w.windowTs === selectedWindow && w.traders.some(t => t.name === bot.name))
+      .filter(w =>
+        w.windowTs === selectedWindow &&
+        (w.duration ?? 900) === selectedDuration &&
+        w.traders.some(t => t.name === bot.name) &&
+        (w.priceCount == null || w.priceCount >= MIN_PRICE_POINTS)
+      )
       .map(w => w.coin);
-  }, [manifest.windows, selectedWindow, bot.name]);
+  }, [manifest.windows, selectedWindow, selectedDuration, bot.name]);
 
   const [selectedCoin, setSelectedCoin] = useState<string>(availableCoins[0] ?? 'btc');
 
@@ -62,14 +80,17 @@ export default function BotPage({ bot, manifest }: Props) {
     if (!selectedWindow || !selectedCoin) return;
     setLoading(true);
     setFetchError(null);
-    fetchWindowDetail(selectedWindow, selectedCoin)
+    fetchWindowDetail(selectedWindow, selectedCoin, selectedDuration)
       .then(d => { setDetail(d); setLoading(false); })
       .catch(e => { setFetchError(e.message); setLoading(false); });
-  }, [selectedWindow, selectedCoin]);
+  }, [selectedWindow, selectedCoin, selectedDuration]);
 
   // Rolling average toggles
   const [showRolling10, setShowRolling10] = useState(false);
   const [showRolling30, setShowRolling30] = useState(false);
+
+  // Trade log collapsed by default
+  const [tradeLogOpen, setTradeLogOpen] = useState(false);
 
   // Compute summary stats across all windows
   const totalPnl = botWindows.reduce((sum, w) => {
@@ -123,7 +144,7 @@ export default function BotPage({ bot, manifest }: Props) {
           </div>
           <div className="summary-stat">
             <span className="summary-label">Windows</span>
-            <span className="summary-value">{windowTimestamps.length}</span>
+            <span className="summary-value">{windowSlots.length}</span>
           </div>
         </div>
       </div>
@@ -133,14 +154,17 @@ export default function BotPage({ bot, manifest }: Props) {
         <div className="control-group">
           <label>Window</label>
           <select
-            value={selectedWindow ?? ''}
-            onChange={e => setSelectedWindow(Number(e.target.value))}
+            value={selectedSlot}
+            onChange={e => setSelectedSlot(e.target.value)}
           >
-            {windowTimestamps.map(ts => (
-              <option key={ts} value={ts}>
-                {formatTime(ts)} UTC — {formatDate(ts)}
-              </option>
-            ))}
+            {windowSlots.map(({ ts, duration }) => {
+              const durLabel = DURATION_LABELS[duration] || `${duration}s`;
+              return (
+                <option key={`${ts}_${duration}`} value={`${ts}_${duration}`}>
+                  {formatTime(ts)} UTC — {formatDate(ts)} ({durLabel})
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -197,6 +221,7 @@ export default function BotPage({ bot, manifest }: Props) {
               trades={traderData.trades}
               settlement={detail.settlement}
               coin={detail.coin}
+              duration={detail.duration ?? selectedDuration}
               showRolling10={showRolling10}
               showRolling30={showRolling30}
             />
@@ -204,38 +229,46 @@ export default function BotPage({ bot, manifest }: Props) {
 
           {traderData.inventory.length > 0 && (
             <ErrorBoundary fallback="InventoryChart">
-              <InventoryChart inventory={traderData.inventory} />
+              <InventoryChart inventory={traderData.inventory} duration={detail.duration ?? selectedDuration} />
             </ErrorBoundary>
           )}
 
           <div className="trade-table-wrapper">
-            <h3 className="chart-title">Trade Log</h3>
-            <div className="trade-list">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Side</th>
-                    <th>Outcome</th>
-                    <th>Tokens</th>
-                    <th>USDC</th>
-                    <th>Price</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {traderData.trades.map((t, i) => (
-                    <tr key={i}>
-                      <td>{Math.floor(t.sec / 60)}:{String(t.sec % 60).padStart(2, '0')}</td>
-                      <td className={t.side === 'BUY' ? 'buy' : 'sell'}>{t.side}</td>
-                      <td>{t.outcome}</td>
-                      <td>{t.tokens.toFixed(1)}</td>
-                      <td>${t.usdc.toFixed(2)}</td>
-                      <td>${t.price.toFixed(3)}</td>
+            <h3
+              className="chart-title collapsible-header"
+              onClick={() => setTradeLogOpen(v => !v)}
+            >
+              <span className={`collapse-arrow ${tradeLogOpen ? 'open' : ''}`}>&#9654;</span>
+              Trade Log ({traderData.trades.length} trades)
+            </h3>
+            {tradeLogOpen && (
+              <div className="trade-list">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Side</th>
+                      <th>Outcome</th>
+                      <th>Tokens</th>
+                      <th>USDC</th>
+                      <th>Price</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {traderData.trades.map((t, i) => (
+                      <tr key={i}>
+                        <td>{Math.floor(t.sec / 60)}:{String(t.sec % 60).padStart(2, '0')}</td>
+                        <td className={t.side === 'BUY' ? 'buy' : 'sell'}>{t.side}</td>
+                        <td>{t.outcome}</td>
+                        <td>{t.tokens.toFixed(1)}</td>
+                        <td>${t.usdc.toFixed(2)}</td>
+                        <td>${t.price.toFixed(3)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </>
       )}

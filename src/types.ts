@@ -48,6 +48,7 @@ export interface TraderWindowData {
 export interface WindowDetail {
   windowTs: number;
   coin: string;
+  duration?: number;
   conditionId: string;
   settlement: {
     winner: 'Up' | 'Down';
@@ -61,6 +62,8 @@ export interface WindowDetail {
 export interface ManifestEntry {
   windowTs: number;
   coin: string;
+  duration?: number;
+  priceCount?: number;
   traders: {
     name: string;
     buyCount: number;

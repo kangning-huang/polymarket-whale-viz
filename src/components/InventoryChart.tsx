@@ -17,9 +17,10 @@ ChartJS.register(LinearScale, PointElement, LineElement, LineController, Tooltip
 
 interface Props {
   inventory: InventoryPoint[];
+  duration?: number;
 }
 
-export default function InventoryChart({ inventory }: Props) {
+export default function InventoryChart({ inventory, duration }: Props) {
   const theme = useThemeColors();
 
   const data = useMemo(() => ({
@@ -54,10 +55,10 @@ export default function InventoryChart({ inventory }: Props) {
       x: {
         type: 'linear' as const,
         min: 0,
-        max: 900,
+        max: duration || 900,
         ticks: {
           color: theme.textSecondary,
-          stepSize: 60,
+          stepSize: (duration || 900) <= 300 ? 30 : 60,
           callback: (val: number | string) => {
             const v = Number(val);
             const m = Math.floor(v / 60);

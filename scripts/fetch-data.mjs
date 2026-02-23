@@ -24,6 +24,8 @@ const PRICES_DIR = join(DATA_DIR, 'prices');
 // Load trader config
 const config = JSON.parse(readFileSync(join(__dirname, 'traders.json'), 'utf-8'));
 const { traders, coins, refTs, windowSec, lookbackHours } = config;
+const windowDurations = config.windowDurations || [windowSec];
+const DURATION_LABELS = { 900: '15m', 300: '5m' };
 
 const DELAY_MS = 100;
 const REQUEST_TIMEOUT = 8000;
@@ -70,12 +72,13 @@ async function fetchJson(url, retries = MAX_RETRIES) {
   return null;
 }
 
-function windowForTs(ts) {
-  return Math.floor((ts - refTs) / windowSec) * windowSec + refTs;
+function windowForTs(ts, dur = windowSec) {
+  return Math.floor((ts - refTs) / dur) * dur + refTs;
 }
 
-function eventSlug(coin, windowTs) {
-  return `${coin}-updown-15m-${windowTs}`;
+function eventSlug(coin, windowTs, dur = 900) {
+  const label = DURATION_LABELS[dur] || `${dur}s`;
+  return `${coin}-updown-${label}-${windowTs}`;
 }
 
 // ── Step 0: Download price files from VPS ──
@@ -154,12 +157,16 @@ function getTargetWindows() {
   const cutoff = now - lookbackHours * 3600;
   const windows = [];
 
-  let wts = windowForTs(now) - windowSec;
-  while (wts >= cutoff) {
-    windows.push(wts);
-    wts -= windowSec;
+  for (const dur of windowDurations) {
+    let wts = windowForTs(now, dur) - dur;
+    while (wts >= cutoff) {
+      windows.push({ ts: wts, duration: dur });
+      wts -= dur;
+    }
   }
 
+  // Sort newest first, dedup by ts+duration
+  windows.sort((a, b) => b.ts - a.ts);
   return windows;
 }
 
@@ -233,12 +240,12 @@ async function fetchPriceHistory(tokenId, startTs, endTs) {
 
 // ── Step 5: Process trades into window data ──
 
-function processWindowTrades(trades, windowTs, coin) {
-  const slug = eventSlug(coin, windowTs);
+function processWindowTrades(trades, windowTs, coin, dur = 900) {
+  const slug = eventSlug(coin, windowTs, dur);
   const windowTrades = trades.filter(t =>
     t.eventSlug === slug &&
     t.timestamp >= windowTs &&
-    t.timestamp < windowTs + windowSec
+    t.timestamp < windowTs + dur
   );
 
   if (windowTrades.length === 0) return null;
@@ -360,15 +367,16 @@ async function main() {
   // Step 0: Download VPS price files
   downloadPriceFiles();
 
-  // Step 1: Compute target windows
+  // Step 1: Compute target windows (multiple durations)
   const targetWindows = getTargetWindows();
-  console.log(`\nTarget windows: ${targetWindows.length} (${new Date(targetWindows[0] * 1000).toISOString()} to ${new Date(targetWindows[targetWindows.length - 1] * 1000).toISOString()})`);
+  console.log(`\nTarget windows: ${targetWindows.length} (durations: ${windowDurations.map(d => DURATION_LABELS[d] || d).join(', ')})`);
+  console.log(`  Range: ${new Date(targetWindows[targetWindows.length - 1].ts * 1000).toISOString()} to ${new Date(targetWindows[0].ts * 1000).toISOString()}`);
 
   // Step 2: Fetch all trader activity for the lookback period
   const traderTrades = {};
   for (const trader of traders) {
-    const startTs = targetWindows[targetWindows.length - 1];
-    const endTs = targetWindows[0] + windowSec;
+    const startTs = targetWindows[targetWindows.length - 1].ts;
+    const endTs = targetWindows[0].ts + targetWindows[0].duration;
     console.log(`\nFetching ${trader.name} activity (${startTs} to ${endTs})...`);
     traderTrades[trader.name] = await fetchTraderActivity(trader.address, startTs, endTs);
     console.log(`  Got ${traderTrades[trader.name].length} trades`);
@@ -381,16 +389,21 @@ async function main() {
   let windowsCached = 0;
   let vpsPriceWindows = 0;
 
-  for (const wts of targetWindows) {
+  for (const { ts: wts, duration: dur } of targetWindows) {
+    const durLabel = DURATION_LABELS[dur] || `${dur}s`;
     for (const coin of coins) {
-      const filename = `${wts}_${coin}.json`;
+      const filename = `${wts}_${coin}_${durLabel}.json`;
       const filepath = join(WINDOWS_DIR, filename);
 
+      // Also check legacy filename (15m only, no label)
+      const legacyFilepath = dur === 900 ? join(WINDOWS_DIR, `${wts}_${coin}.json`) : null;
+
       // Check cache
-      if (existsSync(filepath)) {
+      const cacheFile = existsSync(filepath) ? filepath : (legacyFilepath && existsSync(legacyFilepath) ? legacyFilepath : null);
+      if (cacheFile) {
         try {
-          const cached = JSON.parse(readFileSync(filepath, 'utf-8'));
-          const entry = { windowTs: wts, coin, traders: [] };
+          const cached = JSON.parse(readFileSync(cacheFile, 'utf-8'));
+          const entry = { windowTs: wts, coin, duration: dur, priceCount: cached.prices?.length ?? 0, traders: [] };
           for (const [name, data] of Object.entries(cached.traders || {})) {
             entry.traders.push({
               name,
@@ -412,11 +425,11 @@ async function main() {
       // Check if any trader has trades in this window
       let hasAnyTrades = false;
       for (const trader of traders) {
-        const slug = eventSlug(coin, wts);
+        const slug = eventSlug(coin, wts, dur);
         const windowTrades = (traderTrades[trader.name] || []).filter(t =>
           t.eventSlug === slug &&
           t.timestamp >= wts &&
-          t.timestamp < wts + windowSec
+          t.timestamp < wts + dur
         );
         if (windowTrades.length > 0) hasAnyTrades = true;
       }
@@ -427,10 +440,10 @@ async function main() {
       }
 
       // Fetch market info
-      const slug = eventSlug(coin, wts);
+      const slug = eventSlug(coin, wts, dur);
       const marketInfo = await fetchMarketInfo(slug);
       if (!marketInfo) {
-        console.log(`  Skip ${coin} ${wts} — no market info`);
+        console.log(`  Skip ${coin} ${durLabel} ${wts} — no market info`);
         windowsSkipped++;
         continue;
       }
@@ -457,7 +470,7 @@ async function main() {
         // Fallback: CLOB API price history
         const upTokenId = marketInfo.clobTokenIds[0];
         if (upTokenId) {
-          const history = await fetchPriceHistory(upTokenId, wts, wts + windowSec);
+          const history = await fetchPriceHistory(upTokenId, wts, wts + dur);
           prices = history.map(p => ({
             t: p.t,
             sec: p.t - wts,
@@ -471,9 +484,9 @@ async function main() {
         if (prices.length < 3) {
           const allWindowTrades = [];
           for (const trader of traders) {
-            const s = eventSlug(coin, wts);
+            const s = eventSlug(coin, wts, dur);
             for (const t of (traderTrades[trader.name] || [])) {
-              if (t.eventSlug === s && t.timestamp >= wts && t.timestamp < wts + windowSec) {
+              if (t.eventSlug === s && t.timestamp >= wts && t.timestamp < wts + dur) {
                 allWindowTrades.push(t);
               }
             }
@@ -493,7 +506,7 @@ async function main() {
       // Process trades for each trader
       const tradersData = {};
       for (const trader of traders) {
-        const result = processWindowTrades(traderTrades[trader.name] || [], wts, coin);
+        const result = processWindowTrades(traderTrades[trader.name] || [], wts, coin, dur);
         if (result) {
           computeSettlement(result, settlement);
           tradersData[trader.name] = {
@@ -513,6 +526,7 @@ async function main() {
       const windowDetail = {
         windowTs: wts,
         coin,
+        duration: dur,
         conditionId: marketInfo.conditionId,
         settlement,
         prices,
@@ -525,6 +539,8 @@ async function main() {
       const entry = {
         windowTs: wts,
         coin,
+        duration: dur,
+        priceCount: prices.length,
         traders: Object.entries(tradersData).map(([name, data]) => ({
           name,
           buyCount: data.stats.buyCount,
@@ -537,7 +553,7 @@ async function main() {
       const traderSummary = Object.entries(tradersData)
         .map(([n, d]) => `${n}: ${d.stats.buyCount}B/${d.stats.sellCount}S $${d.stats.netPnl}`)
         .join(', ');
-      console.log(`  ${coin.toUpperCase()} ${new Date(wts * 1000).toISOString().slice(11, 16)} — ${traderSummary}`);
+      console.log(`  ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — ${traderSummary}`);
     }
   }
 
