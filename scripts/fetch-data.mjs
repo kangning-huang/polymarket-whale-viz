@@ -255,18 +255,21 @@ async function fetchMarketInfo(slug) {
   };
 }
 
-// Fetch hourly market info by querying the series and matching by eventStartTime
+// Fetch hourly market info by querying the series endpoint and matching by eventStartTime
 async function fetchHourlyMarketInfo(coin, windowTs) {
   const seriesSlug = HOURLY_SERIES[coin];
   if (!seriesSlug) return null;
 
-  const url = `https://gamma-api.polymarket.com/events?series_slug=${seriesSlug}&active=true&limit=10`;
+  const url = `https://gamma-api.polymarket.com/series?slug=${seriesSlug}`;
   await sleep(DELAY_MS);
   const data = await fetchJson(url);
   if (!data || !Array.isArray(data) || data.length === 0) return null;
+  if (!data[0].events || data[0].events.length === 0) return null;
 
   // Find the market matching our window timestamp
-  for (const event of data) {
+  for (const event of data[0].events) {
+    if (event.closed || !event.active) continue;
+
     const market = event.markets?.[0];
     if (!market) continue;
 
