@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { WindowDetail, TraderConfig } from '../types';
 import { formatTime, formatDate } from '../api';
+import ErrorBoundary from './ErrorBoundary';
 import PriceChart from './PriceChart';
 import InventoryChart from './InventoryChart';
 import StatsCards from './StatsCards';
@@ -50,14 +51,18 @@ export default function WindowDetailView({ detail, traders }: Props) {
       {traderData && (
         <>
           <StatsCards stats={traderData.stats} winner={detail.settlement.winner} />
-          <PriceChart
-            prices={detail.prices}
-            trades={traderData.trades}
-            settlement={detail.settlement}
-            coin={detail.coin}
-          />
+          <ErrorBoundary fallback="PriceChart">
+            <PriceChart
+              prices={detail.prices}
+              trades={traderData.trades}
+              settlement={detail.settlement}
+              coin={detail.coin}
+            />
+          </ErrorBoundary>
           {traderData.inventory.length > 0 && (
-            <InventoryChart inventory={traderData.inventory} />
+            <ErrorBoundary fallback="InventoryChart">
+              <InventoryChart inventory={traderData.inventory} />
+            </ErrorBoundary>
           )}
 
           <div className="trade-table-wrapper">
