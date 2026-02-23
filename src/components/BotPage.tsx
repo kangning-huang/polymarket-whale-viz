@@ -204,7 +204,7 @@ export default function BotPage({ bot, manifest }: Props) {
           <div className="detail-header">
             <h2>
               {detail.coin.toUpperCase()} &mdash;{' '}
-              {formatDate(detail.windowTs)} {formatTime(detail.windowTs)}&ndash;{formatTime(detail.windowTs + 900)} UTC
+              {formatDate(detail.windowTs)} {formatTime(detail.windowTs)}&ndash;{formatTime(detail.windowTs + (detail.duration ?? selectedDuration))} UTC
             </h2>
             <div className="settlement-badge" style={{
               color: detail.settlement.winner === 'Up' ? 'var(--green)' : 'var(--red)'
