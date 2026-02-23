@@ -409,6 +409,29 @@ async function main() {
         }));
       }
 
+      // If API returned no/few prices, derive from trade data
+      // Each trade gives us an Up-equivalent price point
+      if (prices.length < 3) {
+        const allWindowTrades = [];
+        for (const trader of traders) {
+          const s = eventSlug(coin, wts);
+          for (const t of (traderTrades[trader.name] || [])) {
+            if (t.eventSlug === s && t.timestamp >= wts && t.timestamp < wts + windowSec) {
+              allWindowTrades.push(t);
+            }
+          }
+        }
+        allWindowTrades.sort((a, b) => a.timestamp - b.timestamp);
+        const derived = allWindowTrades.map(t => {
+          const outcome = t.outcome || (t.outcomeIndex === 0 ? 'Up' : 'Down');
+          const upPrice = outcome === 'Up' ? t.price : 1 - t.price;
+          return { t: t.timestamp, sec: t.timestamp - wts, p: upPrice };
+        });
+        if (derived.length > prices.length) {
+          prices = derived;
+        }
+      }
+
       // Process trades for each trader
       const tradersData = {};
       for (const trader of traders) {
