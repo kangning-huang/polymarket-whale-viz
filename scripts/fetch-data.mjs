@@ -368,22 +368,15 @@ async function main() {
   mkdirSync(WINDOWS_DIR, { recursive: true });
   mkdirSync(PRICES_DIR, { recursive: true });
 
-  // One-time cache clear: delete 5m files that may have stale data (prices beyond duration)
+  // One-time cache clear: delete ALL 5m files - they were using 15m market VPS prices (wrong market)
   if (existsSync(WINDOWS_DIR)) {
     const staleFiles = readdirSync(WINDOWS_DIR).filter(f => f.endsWith('_5m.json'));
     if (staleFiles.length > 0) {
-      console.log(`\nClearing ${staleFiles.length} stale 5m cache files...`);
+      console.log(`\nClearing ${staleFiles.length} stale 5m cache files (had wrong 15m market prices)...`);
       for (const f of staleFiles) {
         try {
-          const filepath = join(WINDOWS_DIR, f);
-          const data = JSON.parse(readFileSync(filepath, 'utf-8'));
-          // Check if prices extend beyond duration
-          const maxSec = data.prices?.reduce((m, p) => Math.max(m, p.sec), 0) || 0;
-          const dur = data.duration || 300;
-          if (maxSec >= dur) {
-            console.log(`  Removing stale ${f} (maxSec=${maxSec}, dur=${dur})`);
-            unlinkSync(filepath);
-          }
+          unlinkSync(join(WINDOWS_DIR, f));
+          console.log(`  Removed ${f}`);
         } catch { /* ignore */ }
       }
     }
@@ -488,7 +481,8 @@ async function main() {
       }
 
       // Price priority: VPS per-second > CLOB API > trade-derived
-      let prices = loadVpsPrices(wts, coin, dur);
+      // NOTE: VPS only records 15m market prices, so skip VPS for 5m windows
+      let prices = dur === 900 ? loadVpsPrices(wts, coin, dur) : null;
       if (prices) {
         vpsPriceWindows++;
       } else {
