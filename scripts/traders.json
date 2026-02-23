@@ -1,0 +1,13 @@
+{
+  "traders": [
+    {
+      "address": "0xe00740bce98a594e26861838885ab310ec3b548c",
+      "name": "distinct-baguette",
+      "color": "#58a6ff"
+    }
+  ],
+  "coins": ["btc", "eth", "sol", "xrp"],
+  "refTs": 1770435000,
+  "windowSec": 900,
+  "lookbackHours": 24
+}
