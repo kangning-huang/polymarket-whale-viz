@@ -502,46 +502,15 @@ async function main() {
         continue;
       }
 
-      // Price priority: VPS per-second > CLOB API > trade-derived
-      let prices = loadVpsPrices(wts, coin, dur);
-      if (prices) {
-        vpsPriceWindows++;
-      } else {
-        // Fallback: CLOB API price history
-        const upTokenId = marketInfo.clobTokenIds[0];
-        if (upTokenId) {
-          const history = await fetchPriceHistory(upTokenId, wts, wts + dur);
-          prices = history.map(p => ({
-            t: p.t,
-            sec: p.t - wts,
-            p: parseFloat(p.p),
-          }));
-        } else {
-          prices = [];
-        }
-
-        // Last fallback: derive from trade data
-        if (prices.length < 3) {
-          const allWindowTrades = [];
-          for (const trader of traders) {
-            const s = eventSlug(coin, wts, dur);
-            for (const t of (traderTrades[trader.name] || [])) {
-              if (t.eventSlug === s && t.timestamp >= wts && t.timestamp < wts + dur) {
-                allWindowTrades.push(t);
-              }
-            }
-          }
-          allWindowTrades.sort((a, b) => a.timestamp - b.timestamp);
-          const derived = allWindowTrades.map(t => {
-            const outcome = t.outcome || (t.outcomeIndex === 0 ? 'Up' : 'Down');
-            const upPriceVal = outcome === 'Up' ? t.price : 1 - t.price;
-            return { t: t.timestamp, sec: t.timestamp - wts, p: upPriceVal };
-          });
-          if (derived.length > prices.length) {
-            prices = derived;
-          }
-        }
+      // Only use VPS per-second prices - no fallback to interpolated/derived data
+      // Visitors need to see actual price movements to analyze bot strategies
+      const prices = loadVpsPrices(wts, coin, dur);
+      if (!prices) {
+        console.log(`  Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — no VPS price data`);
+        windowsSkipped++;
+        continue;
       }
+      vpsPriceWindows++;
 
       // Process trades for each trader (only traders who trade this duration)
       const tradersData = {};
