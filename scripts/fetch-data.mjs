@@ -273,10 +273,13 @@ async function fetchHourlyMarketInfo(coin, windowTs) {
     const market = event.markets?.[0];
     if (!market) continue;
 
-    const eventStartTime = market.eventStartTime || event.startDate;
-    if (!eventStartTime) continue;
+    // For hourly markets, endDate is when window closes
+    // Window start = endDate - 3600 (1 hour before)
+    const endDateStr = market.endDate || event.endDate;
+    if (!endDateStr) continue;
 
-    const startTs = Math.floor(new Date(eventStartTime).getTime() / 1000);
+    const endTs = Math.floor(new Date(endDateStr).getTime() / 1000);
+    const startTs = endTs - 3600; // 1 hour before end
     // Allow some tolerance (within same hour)
     if (Math.abs(startTs - windowTs) < 60) {
       hourlySlugCache.set(`${windowTs}_${coin}`, market.slug);
