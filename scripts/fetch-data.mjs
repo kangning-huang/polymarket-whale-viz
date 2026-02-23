@@ -76,10 +76,24 @@ function windowForTs(ts, dur = windowSec) {
   return Math.floor((ts - refTs) / dur) * dur + refTs;
 }
 
+// For 5m/15m markets: timestamp-based slug
+// For 1h markets: need to look up from series (handled separately)
 function eventSlug(coin, windowTs, dur = 900) {
+  if (dur === 3600) return null; // hourly markets use series-based slugs
   const label = DURATION_LABELS[dur] || `${dur}s`;
   return `${coin}-updown-${label}-${windowTs}`;
 }
+
+// Hourly market series mapping
+const HOURLY_SERIES = {
+  btc: 'btc-up-or-down-hourly',
+  eth: 'eth-up-or-down-hourly',
+  sol: 'sol-up-or-down-hourly',
+  xrp: 'xrp-up-or-down-hourly',
+};
+
+// Cache for hourly market slug lookups (windowTs -> slug)
+const hourlySlugCache = new Map();
 
 // ── Step 0: Download price files from VPS ──
 
@@ -237,7 +251,43 @@ async function fetchMarketInfo(slug) {
     outcomePrices: market.outcomePrices ? JSON.parse(market.outcomePrices) : [],
     outcomes: market.outcomes ? JSON.parse(market.outcomes) : ['Up', 'Down'],
     closed: market.closed,
+    slug: market.slug,
   };
+}
+
+// Fetch hourly market info by querying the series and matching by eventStartTime
+async function fetchHourlyMarketInfo(coin, windowTs) {
+  const seriesSlug = HOURLY_SERIES[coin];
+  if (!seriesSlug) return null;
+
+  const url = `https://gamma-api.polymarket.com/events?series_slug=${seriesSlug}&active=true&limit=10`;
+  await sleep(DELAY_MS);
+  const data = await fetchJson(url);
+  if (!data || !Array.isArray(data) || data.length === 0) return null;
+
+  // Find the market matching our window timestamp
+  for (const event of data) {
+    const market = event.markets?.[0];
+    if (!market) continue;
+
+    const eventStartTime = market.eventStartTime || event.startDate;
+    if (!eventStartTime) continue;
+
+    const startTs = Math.floor(new Date(eventStartTime).getTime() / 1000);
+    // Allow some tolerance (within same hour)
+    if (Math.abs(startTs - windowTs) < 60) {
+      hourlySlugCache.set(`${windowTs}_${coin}`, market.slug);
+      return {
+        conditionId: market.conditionId,
+        clobTokenIds: market.clobTokenIds ? JSON.parse(market.clobTokenIds) : [],
+        outcomePrices: market.outcomePrices ? JSON.parse(market.outcomePrices) : [],
+        outcomes: market.outcomes ? JSON.parse(market.outcomes) : ['Up', 'Down'],
+        closed: market.closed,
+        slug: market.slug,
+      };
+    }
+  }
+  return null;
 }
 
 // ── Step 4: Fetch price history ──
@@ -252,8 +302,11 @@ async function fetchPriceHistory(tokenId, startTs, endTs) {
 
 // ── Step 5: Process trades into window data ──
 
-function processWindowTrades(trades, windowTs, coin, dur = 900) {
-  const slug = eventSlug(coin, windowTs, dur);
+function processWindowTrades(trades, windowTs, coin, dur = 900, marketSlug = null) {
+  // For hourly markets, use the cached slug; for others, compute it
+  const slug = dur === 3600 ? marketSlug : eventSlug(coin, windowTs, dur);
+  if (!slug) return null;
+
   const windowTrades = trades.filter(t =>
     t.eventSlug === slug &&
     t.timestamp >= windowTs &&
@@ -459,18 +512,22 @@ async function main() {
       }
 
       // Check if any trader has trades in this window (only traders who trade this duration)
+      // For hourly markets, we need to check trades by time range since we don't know the slug yet
       let hasAnyTrades = false;
       for (const trader of traders) {
         // Skip traders who don't trade this duration
         const traderDurations = trader.durations || windowDurations;
         if (!traderDurations.includes(dur)) continue;
 
-        const slug = eventSlug(coin, wts, dur);
-        const windowTrades = (traderTrades[trader.name] || []).filter(t =>
-          t.eventSlug === slug &&
-          t.timestamp >= wts &&
-          t.timestamp < wts + dur
-        );
+        const windowTrades = (traderTrades[trader.name] || []).filter(t => {
+          // For hourly markets, match by timestamp range (slug will be verified later)
+          if (dur === 3600) {
+            return t.timestamp >= wts && t.timestamp < wts + dur;
+          }
+          // For 5m/15m markets, match by slug
+          const slug = eventSlug(coin, wts, dur);
+          return t.eventSlug === slug && t.timestamp >= wts && t.timestamp < wts + dur;
+        });
         if (windowTrades.length > 0) hasAnyTrades = true;
       }
 
@@ -479,14 +536,20 @@ async function main() {
         continue;
       }
 
-      // Fetch market info
-      const slug = eventSlug(coin, wts, dur);
-      const marketInfo = await fetchMarketInfo(slug);
+      // Fetch market info (hourly markets use series-based lookup)
+      let marketInfo;
+      if (dur === 3600) {
+        marketInfo = await fetchHourlyMarketInfo(coin, wts);
+      } else {
+        const slug = eventSlug(coin, wts, dur);
+        marketInfo = await fetchMarketInfo(slug);
+      }
       if (!marketInfo) {
         console.log(`  Skip ${coin} ${durLabel} ${wts} — no market info`);
         windowsSkipped++;
         continue;
       }
+      const marketSlug = marketInfo.slug;
 
       // Determine settlement
       const upPrice = parseFloat(marketInfo.outcomePrices[0] || '0.5');
@@ -519,7 +582,7 @@ async function main() {
         const traderDurations = trader.durations || windowDurations;
         if (!traderDurations.includes(dur)) continue;
 
-        const result = processWindowTrades(traderTrades[trader.name] || [], wts, coin, dur);
+        const result = processWindowTrades(traderTrades[trader.name] || [], wts, coin, dur, marketSlug);
         if (result) {
           computeSettlement(result, settlement);
           tradersData[trader.name] = {
