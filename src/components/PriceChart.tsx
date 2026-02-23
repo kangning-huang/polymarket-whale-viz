@@ -36,57 +36,91 @@ interface Props {
 }
 
 export default function PriceChart({ prices, trades, settlement, coin }: Props) {
+  const hasDenseData = prices.length > 100;
+  const hasBidAsk = prices.some(p => p.bid != null && p.ask != null);
+
   const data = useMemo(() => {
     const buys = trades.filter(t => t.side === 'BUY');
     const sells = trades.filter(t => t.side === 'SELL');
 
-    return {
-      datasets: [
-        {
-          type: 'line' as const,
-          label: `${coin.toUpperCase()}-UP Mid`,
-          data: prices.map(p => ({ x: p.sec, y: p.p * 100 })),
-          borderColor: '#58a6ff',
-          backgroundColor: 'rgba(88,166,255,0.1)',
-          borderWidth: 2,
-          tension: 0.3,
-          pointRadius: 0,
-          fill: false,
-          order: 2,
-        },
-        {
-          type: 'scatter' as const,
-          label: 'Buy',
-          data: buys.map(t => ({
-            x: t.sec,
-            y: t.price * 100,
-            tokens: t.tokens,
-            usdc: t.usdc,
-            outcome: t.outcome,
-          })),
-          backgroundColor: '#3fb950',
-          borderColor: '#3fb950',
-          pointRadius: buys.map(t => Math.max(3, Math.min(8, t.tokens / 5))),
-          order: 1,
-        },
-        {
-          type: 'scatter' as const,
-          label: 'Sell',
-          data: sells.map(t => ({
-            x: t.sec,
-            y: t.price * 100,
-            tokens: t.tokens,
-            usdc: t.usdc,
-            outcome: t.outcome,
-          })),
-          backgroundColor: '#f85149',
-          borderColor: '#f85149',
-          pointRadius: sells.map(t => Math.max(3, Math.min(8, t.tokens / 5))),
-          order: 1,
-        },
-      ],
-    };
-  }, [prices, trades, coin]);
+    const datasets: any[] = [];
+
+    if (hasBidAsk) {
+      // Bid-ask spread band (filled area)
+      datasets.push({
+        type: 'line' as const,
+        label: 'Ask',
+        data: prices.map(p => ({ x: p.sec, y: p.ask != null ? p.ask * 100 : null })),
+        borderColor: 'rgba(88,166,255,0.2)',
+        backgroundColor: 'rgba(88,166,255,0.08)',
+        borderWidth: 0,
+        pointRadius: 0,
+        fill: '+1',
+        tension: 0,
+        order: 4,
+      });
+      datasets.push({
+        type: 'line' as const,
+        label: 'Bid',
+        data: prices.map(p => ({ x: p.sec, y: p.bid != null ? p.bid * 100 : null })),
+        borderColor: 'rgba(88,166,255,0.2)',
+        borderWidth: 0,
+        pointRadius: 0,
+        fill: false,
+        tension: 0,
+        order: 4,
+      });
+    }
+
+    // Mid price line
+    datasets.push({
+      type: 'line' as const,
+      label: `${coin.toUpperCase()}-UP Mid`,
+      data: prices.map(p => ({ x: p.sec, y: p.p * 100 })),
+      borderColor: '#58a6ff',
+      backgroundColor: 'rgba(88,166,255,0.1)',
+      borderWidth: hasDenseData ? 1.5 : 2,
+      tension: hasDenseData ? 0 : 0.3,
+      pointRadius: 0,
+      fill: false,
+      order: 3,
+    });
+
+    // Trade scatter points
+    datasets.push({
+      type: 'scatter' as const,
+      label: 'Buy',
+      data: buys.map(t => ({
+        x: t.sec,
+        y: t.price * 100,
+        tokens: t.tokens,
+        usdc: t.usdc,
+        outcome: t.outcome,
+      })),
+      backgroundColor: '#3fb950',
+      borderColor: '#3fb950',
+      pointRadius: buys.map(t => Math.max(3, Math.min(8, t.tokens / 5))),
+      order: 1,
+    });
+
+    datasets.push({
+      type: 'scatter' as const,
+      label: 'Sell',
+      data: sells.map(t => ({
+        x: t.sec,
+        y: t.price * 100,
+        tokens: t.tokens,
+        usdc: t.usdc,
+        outcome: t.outcome,
+      })),
+      backgroundColor: '#f85149',
+      borderColor: '#f85149',
+      pointRadius: sells.map(t => Math.max(3, Math.min(8, t.tokens / 5))),
+      order: 1,
+    });
+
+    return { datasets };
+  }, [prices, trades, coin, hasDenseData, hasBidAsk]);
 
   const options = useMemo(() => ({
     responsive: true,
@@ -115,7 +149,14 @@ export default function PriceChart({ prices, trades, settlement, coin }: Props) 
     },
     plugins: {
       legend: {
-        labels: { color: '#c9d1d9', usePointStyle: true },
+        labels: {
+          color: '#c9d1d9',
+          usePointStyle: true,
+          filter: (item: any) => {
+            // Hide bid/ask from legend
+            return item.text !== 'Ask' && item.text !== 'Bid';
+          },
+        },
       },
       tooltip: {
         callbacks: {
@@ -153,7 +194,12 @@ export default function PriceChart({ prices, trades, settlement, coin }: Props) 
 
   return (
     <div className="chart-box">
-      <h3 className="chart-title">{coin.toUpperCase()}-UP Price & Trades</h3>
+      <h3 className="chart-title">
+        {coin.toUpperCase()}-UP Price & Trades
+        {hasDenseData && <span style={{ color: '#8b949e', fontWeight: 400, fontSize: 12, marginLeft: 8 }}>
+          ({prices.length} price points)
+        </span>}
+      </h3>
       <div className="chart-wrapper">
         <Chart type="scatter" data={data} options={options} />
       </div>

@@ -1,39 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import { fetchManifest, fetchWindowDetail } from './api';
 import type { Manifest, WindowDetail, TraderConfig } from './types';
 import Header from './components/Header';
-import TraderFilter from './components/TraderFilter';
-import CoinFilter from './components/CoinFilter';
-import WindowGrid from './components/WindowGrid';
+import BotCard from './components/BotCard';
+import BotPage from './components/BotPage';
 import WindowDetailView from './components/WindowDetail';
 
 function Landing() {
   const navigate = useNavigate();
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCoins, setSelectedCoins] = useState<Set<string>>(new Set(['btc', 'eth', 'sol', 'xrp']));
-  const [selectedTrader, setSelectedTrader] = useState<string>('');
 
   useEffect(() => {
     fetchManifest()
-      .then(m => {
-        setManifest(m);
-        if (m.traders.length > 0) setSelectedTrader(m.traders[0].name);
-      })
+      .then(setManifest)
       .catch(e => setError(e.message));
-  }, []);
-
-  const toggleCoin = useCallback((coin: string) => {
-    setSelectedCoins(prev => {
-      const next = new Set(prev);
-      if (next.has(coin)) {
-        if (next.size > 1) next.delete(coin);
-      } else {
-        next.add(coin);
-      }
-      return next;
-    });
   }, []);
 
   if (error) {
@@ -42,7 +24,7 @@ function Landing() {
         <Header />
         <div className="error-box">
           <p>Failed to load data: {error}</p>
-          <p className="error-hint">Run <code>npm run fetch-data</code> to populate data, or wait for the next GitHub Actions build.</p>
+          <p className="error-hint">Data updates every 2 hours. Try again later.</p>
         </div>
       </div>
     );
@@ -57,33 +39,84 @@ function Landing() {
     );
   }
 
-  const filteredWindows = manifest.windows.filter(w =>
-    selectedCoins.has(w.coin) &&
-    (!selectedTrader || w.traders.some(t => t.name === selectedTrader))
+  return (
+    <div className="container">
+      <Header />
+      <p className="landing-intro">
+        These are the most profitable bots on Polymarket's 15-minute crypto prediction markets.
+        Pick one to study their trades.
+      </p>
+      <div className="bot-grid">
+        {manifest.traders.map(bot => (
+          <BotCard
+            key={bot.name}
+            bot={bot}
+            windows={manifest.windows}
+            onClick={() => navigate(`/bot/${bot.name}`)}
+          />
+        ))}
+      </div>
+    </div>
   );
+}
+
+function BotPageRoute() {
+  const { name } = useParams<{ name: string }>();
+  const navigate = useNavigate();
+  const [manifest, setManifest] = useState<Manifest | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchManifest()
+      .then(setManifest)
+      .catch(e => setError(e.message));
+  }, []);
+
+  if (error) {
+    return (
+      <div className="container">
+        <Header />
+        <div className="error-box">Failed to load data: {error}</div>
+        <button className="back-btn" onClick={() => navigate('/')}>Back</button>
+      </div>
+    );
+  }
+
+  if (!manifest) {
+    return (
+      <div className="container">
+        <Header />
+        <div className="loading">Loading market data...</div>
+      </div>
+    );
+  }
+
+  const bot = manifest.traders.find(t => t.name === name);
+  if (!bot) {
+    return (
+      <div className="container">
+        <Header />
+        <div className="error-box">Bot "{name}" not found.</div>
+        <button className="back-btn" onClick={() => navigate('/')}>Back</button>
+      </div>
+    );
+  }
 
   return (
     <div className="container">
       <Header />
-      <div className="filters">
-        <CoinFilter selected={selectedCoins} onToggle={toggleCoin} />
-        <TraderFilter
-          traders={manifest.traders}
-          selected={selectedTrader}
-          onSelect={setSelectedTrader}
-        />
-      </div>
-      <WindowGrid
-        windows={filteredWindows}
-        trader={selectedTrader}
-        onSelect={(ts, coin) => navigate(`/window/${ts}/${coin}`)}
+      <button className="back-btn" onClick={() => navigate('/')}>← Back to all bots</button>
+      <BotPage
+        bot={bot}
+        manifest={manifest}
+        onSelectWindow={(ts, coin) => navigate(`/bot/${name}/${ts}/${coin}`)}
       />
     </div>
   );
 }
 
 function WindowPage() {
-  const { ts, coin } = useParams<{ ts: string; coin: string }>();
+  const { name, ts, coin } = useParams<{ name: string; ts: string; coin: string }>();
   const navigate = useNavigate();
   const [detail, setDetail] = useState<WindowDetail | null>(null);
   const [manifest, setManifest] = useState<Manifest | null>(null);
@@ -102,7 +135,7 @@ function WindowPage() {
       <div className="container">
         <Header />
         <div className="error-box">Failed to load window: {error}</div>
-        <button className="back-btn" onClick={() => navigate('/')}>Back</button>
+        <button className="back-btn" onClick={() => navigate(`/bot/${name}`)}>Back</button>
       </div>
     );
   }
@@ -123,7 +156,9 @@ function WindowPage() {
   return (
     <div className="container">
       <Header />
-      <button className="back-btn" onClick={() => navigate('/')}>← Back to all windows</button>
+      <button className="back-btn" onClick={() => navigate(`/bot/${name}`)}>
+        ← Back to {name}
+      </button>
       <WindowDetailView detail={detail} traders={traders} />
     </div>
   );
@@ -133,7 +168,20 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
-      <Route path="/window/:ts/:coin" element={<WindowPage />} />
+      <Route path="/bot/:name" element={<BotPageRoute />} />
+      <Route path="/bot/:name/:ts/:coin" element={<WindowPage />} />
+      {/* Legacy route redirect */}
+      <Route path="/window/:ts/:coin" element={<LegacyRedirect />} />
     </Routes>
   );
+}
+
+function LegacyRedirect() {
+  const { ts, coin } = useParams<{ ts: string; coin: string }>();
+  const navigate = useNavigate();
+  useEffect(() => {
+    // Redirect old /window/:ts/:coin to first bot
+    navigate(`/bot/distinct-baguette/${ts}/${coin}`, { replace: true });
+  }, [ts, coin, navigate]);
+  return null;
 }

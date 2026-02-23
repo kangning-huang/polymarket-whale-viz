@@ -20,6 +20,11 @@ export interface PricePoint {
   t: number;
   sec: number;
   p: number;
+  bid?: number;
+  ask?: number;
+  dnBid?: number;
+  dnAsk?: number;
+  cex?: number;
 }
 
 export interface TraderStats {
@@ -68,6 +73,9 @@ export interface TraderConfig {
   address: string;
   name: string;
   color: string;
+  description?: string;
+  profileUrl?: string;
+  screenshot?: string;
 }
 
 export interface Manifest {

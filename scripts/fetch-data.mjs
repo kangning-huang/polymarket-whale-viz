@@ -3,13 +3,15 @@
  * fetch-data.mjs — Data pipeline for Polymarket Whale Watch
  *
  * Fetches trader activity from Polymarket public APIs for the last 24h,
+ * downloads per-second price data from VPS (if available),
  * computes per-window stats, and writes JSON files for the frontend.
  *
  * Usage: node scripts/fetch-data.mjs
  * Output: public/data/manifest.json + public/data/windows/<ts>_<coin>.json
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -17,6 +19,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const DATA_DIR = join(ROOT, 'public', 'data');
 const WINDOWS_DIR = join(DATA_DIR, 'windows');
+const PRICES_DIR = join(DATA_DIR, 'prices');
 
 // Load trader config
 const config = JSON.parse(readFileSync(join(__dirname, 'traders.json'), 'utf-8'));
@@ -25,6 +28,11 @@ const { traders, coins, refTs, windowSec, lookbackHours } = config;
 const DELAY_MS = 100;
 const REQUEST_TIMEOUT = 8000;
 const MAX_RETRIES = 3;
+
+// VPS config from environment
+const VPS_SSH_KEY = process.env.VPS_SSH_KEY_PATH || '';
+const VPS_HOST = process.env.VPS_HOST || '';
+const VPS_PRICES_PATH = process.env.VPS_PRICES_PATH || '/opt/polymarket/data/raw/prices/';
 
 // ── Helpers ──
 
@@ -62,19 +70,81 @@ async function fetchJson(url, retries = MAX_RETRIES) {
   return null;
 }
 
-/**
- * Compute the window timestamp that a given epoch-second falls into.
- */
 function windowForTs(ts) {
   return Math.floor((ts - refTs) / windowSec) * windowSec + refTs;
 }
 
-/**
- * Build event slug for a coin + window timestamp.
- * Pattern from API: "btc-updown-15m-1771817400"
- */
 function eventSlug(coin, windowTs) {
   return `${coin}-updown-15m-${windowTs}`;
+}
+
+// ── Step 0: Download price files from VPS ──
+
+function downloadPriceFiles() {
+  mkdirSync(PRICES_DIR, { recursive: true });
+
+  if (!VPS_SSH_KEY || !VPS_HOST) {
+    console.log('\nNo VPS_SSH_KEY_PATH or VPS_HOST set — skipping VPS price download');
+    return;
+  }
+
+  console.log(`\nDownloading prices from VPS ${VPS_HOST}...`);
+  try {
+    execSync(
+      `rsync -avz --ignore-existing -e "ssh -i ${VPS_SSH_KEY} -o StrictHostKeyChecking=no" ` +
+      `ubuntu@${VPS_HOST}:${VPS_PRICES_PATH} ${PRICES_DIR}/`,
+      { stdio: 'pipe', timeout: 60000 }
+    );
+    const files = readdirSync(PRICES_DIR).filter(f => f.startsWith('price_'));
+    console.log(`  Downloaded/cached ${files.length} price files`);
+  } catch (e) {
+    console.warn(`  VPS sync failed: ${e.message}. Continuing with API fallback.`);
+  }
+}
+
+// ── Step 0b: Load per-second prices from VPS data ──
+
+function loadVpsPrices(windowTs, coin) {
+  const filepath = join(PRICES_DIR, `price_${windowTs}_${coin}.jsonl`);
+  if (!existsSync(filepath)) return null;
+
+  try {
+    const lines = readFileSync(filepath, 'utf-8').trim().split('\n');
+    if (lines.length < 10) return null; // too sparse
+
+    const points = [];
+    for (const line of lines) {
+      if (!line) continue;
+      const row = JSON.parse(line);
+      const uB = row.uB;
+      const uA = row.uA;
+      const dB = row.dB;
+      const dA = row.dA;
+
+      // Mid price from Up bid/ask
+      let mid = null;
+      if (uB != null && uA != null) mid = (uB + uA) / 2;
+      else if (uB != null) mid = uB;
+      else if (uA != null) mid = uA;
+
+      if (mid == null) continue;
+
+      points.push({
+        t: windowTs + row.sec,
+        sec: row.sec,
+        p: Math.round(mid * 1000) / 1000,
+        bid: uB != null ? Math.round(uB * 1000) / 1000 : undefined,
+        ask: uA != null ? Math.round(uA * 1000) / 1000 : undefined,
+        dnBid: dB != null ? Math.round(dB * 1000) / 1000 : undefined,
+        dnAsk: dA != null ? Math.round(dA * 1000) / 1000 : undefined,
+        cex: row.cex != null ? row.cex : undefined,
+      });
+    }
+
+    return points.length >= 10 ? points : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Step 1: Compute target windows ──
@@ -84,8 +154,7 @@ function getTargetWindows() {
   const cutoff = now - lookbackHours * 3600;
   const windows = [];
 
-  // Start from the most recent completed window and go back
-  let wts = windowForTs(now) - windowSec; // most recent COMPLETED window
+  let wts = windowForTs(now) - windowSec;
   while (wts >= cutoff) {
     windows.push(wts);
     wts -= windowSec;
@@ -96,10 +165,6 @@ function getTargetWindows() {
 
 // ── Step 2: Fetch trader activity ──
 
-/**
- * Fetch ALL trades for a trader within a time range.
- * Uses offset pagination since startDate/endDate params may not work.
- */
 async function fetchTraderActivity(traderAddr, startTs, endTs) {
   const allTrades = [];
   let offset = 0;
@@ -111,11 +176,10 @@ async function fetchTraderActivity(traderAddr, startTs, endTs) {
     const data = await fetchJson(url);
     if (!data || !Array.isArray(data) || data.length === 0) break;
 
-    // Trades come newest-first
     let reachedStart = false;
     for (const trade of data) {
       if (trade.type !== 'TRADE') continue;
-      if (trade.timestamp > endTs) continue; // too new, skip
+      if (trade.timestamp > endTs) continue;
       if (trade.timestamp < startTs) {
         reachedStart = true;
         break;
@@ -127,7 +191,6 @@ async function fetchTraderActivity(traderAddr, startTs, endTs) {
     if (data.length < limit) break;
     offset += limit;
 
-    // Safety: don't paginate forever
     if (offset > 50000) {
       console.warn(`  Stopping pagination at offset ${offset} for ${traderAddr}`);
       break;
@@ -165,13 +228,12 @@ async function fetchPriceHistory(tokenId, startTs, endTs) {
   await sleep(DELAY_MS);
   const data = await fetchJson(url);
   if (!data || !data.history) return [];
-  return data.history; // [{t, p}, ...]
+  return data.history;
 }
 
 // ── Step 5: Process trades into window data ──
 
 function processWindowTrades(trades, windowTs, coin) {
-  // Filter trades for this specific coin+window
   const slug = eventSlug(coin, windowTs);
   const windowTrades = trades.filter(t =>
     t.eventSlug === slug &&
@@ -181,10 +243,8 @@ function processWindowTrades(trades, windowTs, coin) {
 
   if (windowTrades.length === 0) return null;
 
-  // Sort by timestamp ascending
   windowTrades.sort((a, b) => a.timestamp - b.timestamp);
 
-  // Build trade objects
   const processedTrades = windowTrades.map(t => ({
     ts: t.timestamp,
     sec: t.timestamp - windowTs,
@@ -196,7 +256,7 @@ function processWindowTrades(trades, windowTs, coin) {
   }));
 
   // FIFO inventory tracking
-  const inventory = { Up: [], Down: [] }; // queues of { price, tokens }
+  const inventory = { Up: [], Down: [] };
   const position = { upTokens: 0, downTokens: 0, upUsdc: 0, downUsdc: 0 };
   const inventorySnapshots = [];
   let spreadPnl = 0;
@@ -215,7 +275,6 @@ function processWindowTrades(trades, windowTs, coin) {
         position.downUsdc += trade.usdc;
       }
     } else {
-      // SELL — FIFO matching
       let remaining = trade.tokens;
       while (remaining > 0 && inventory[outcome].length > 0) {
         const oldest = inventory[outcome][0];
@@ -243,7 +302,6 @@ function processWindowTrades(trades, windowTs, coin) {
     });
   }
 
-  // Compute stats
   const buys = processedTrades.filter(t => t.side === 'BUY');
   const sells = processedTrades.filter(t => t.side === 'SELL');
   const buyUsdc = buys.reduce((s, t) => s + t.usdc, 0);
@@ -260,10 +318,9 @@ function processWindowTrades(trades, windowTs, coin) {
       avgBuy: buys.length > 0 ? Math.round(buys.reduce((s, t) => s + t.price, 0) / buys.length * 1000) / 1000 : 0,
       avgSell: sells.length > 0 ? Math.round(sells.reduce((s, t) => s + t.price, 0) / sells.length * 1000) / 1000 : 0,
       spreadPnl: Math.round(spreadPnl * 100) / 100,
-      settlementPnl: 0, // computed after we know settlement
+      settlementPnl: 0,
       netPnl: 0,
     },
-    // Remaining inventory for settlement calc
     _remainingUp: inventory.Up.reduce((s, e) => s + e.tokens, 0),
     _remainingDown: inventory.Down.reduce((s, e) => s + e.tokens, 0),
     _remainingUpCost: inventory.Up.reduce((s, e) => s + e.tokens * e.price, 0),
@@ -276,14 +333,12 @@ function computeSettlement(traderData, settlement) {
   const upSettle = settlement.upPrice;
   const downSettle = settlement.downPrice;
 
-  // Settlement P&L = tokens_held * (settle_price - avg_cost)
   const upPnl = traderData._remainingUp * (upSettle - (traderData._remainingUp > 0 ? traderData._remainingUpCost / traderData._remainingUp : 0));
   const downPnl = traderData._remainingDown * (downSettle - (traderData._remainingDown > 0 ? traderData._remainingDownCost / traderData._remainingDown : 0));
 
   traderData.stats.settlementPnl = Math.round((upPnl + downPnl) * 100) / 100;
   traderData.stats.netPnl = Math.round((traderData.stats.spreadPnl + traderData.stats.settlementPnl) * 100) / 100;
 
-  // Clean up internal fields
   delete traderData._remainingUp;
   delete traderData._remainingDown;
   delete traderData._remainingUpCost;
@@ -300,6 +355,10 @@ async function main() {
 
   // Ensure output dirs
   mkdirSync(WINDOWS_DIR, { recursive: true });
+  mkdirSync(PRICES_DIR, { recursive: true });
+
+  // Step 0: Download VPS price files
+  downloadPriceFiles();
 
   // Step 1: Compute target windows
   const targetWindows = getTargetWindows();
@@ -308,18 +367,19 @@ async function main() {
   // Step 2: Fetch all trader activity for the lookback period
   const traderTrades = {};
   for (const trader of traders) {
-    const startTs = targetWindows[targetWindows.length - 1]; // oldest window
-    const endTs = targetWindows[0] + windowSec; // end of newest window
+    const startTs = targetWindows[targetWindows.length - 1];
+    const endTs = targetWindows[0] + windowSec;
     console.log(`\nFetching ${trader.name} activity (${startTs} to ${endTs})...`);
     traderTrades[trader.name] = await fetchTraderActivity(trader.address, startTs, endTs);
     console.log(`  Got ${traderTrades[trader.name].length} trades`);
   }
 
-  // Step 3: Process each window × coin
+  // Step 3: Process each window x coin
   const manifest = [];
   let windowsWritten = 0;
   let windowsSkipped = 0;
   let windowsCached = 0;
+  let vpsPriceWindows = 0;
 
   for (const wts of targetWindows) {
     for (const coin of coins) {
@@ -328,14 +388,9 @@ async function main() {
 
       // Check cache
       if (existsSync(filepath)) {
-        // Load cached manifest entry
         try {
           const cached = JSON.parse(readFileSync(filepath, 'utf-8'));
-          const entry = {
-            windowTs: wts,
-            coin,
-            traders: [],
-          };
+          const entry = { windowTs: wts, coin, traders: [] };
           for (const [name, data] of Object.entries(cached.traders || {})) {
             entry.traders.push({
               name,
@@ -355,9 +410,7 @@ async function main() {
       }
 
       // Check if any trader has trades in this window
-      const traderResults = {};
       let hasAnyTrades = false;
-
       for (const trader of traders) {
         const slug = eventSlug(coin, wts);
         const windowTrades = (traderTrades[trader.name] || []).filter(t =>
@@ -391,44 +444,49 @@ async function main() {
         downPrice,
       };
 
-      // Only include resolved windows (clear winner)
       if (!marketInfo.closed && upPrice > 0.1 && upPrice < 0.9) {
         windowsSkipped++;
         continue;
       }
 
-      // Fetch price history
-      const upTokenId = marketInfo.clobTokenIds[0];
-      let prices = [];
-      if (upTokenId) {
-        const history = await fetchPriceHistory(upTokenId, wts, wts + windowSec);
-        prices = history.map(p => ({
-          t: p.t,
-          sec: p.t - wts,
-          p: parseFloat(p.p),
-        }));
-      }
+      // Price priority: VPS per-second > CLOB API > trade-derived
+      let prices = loadVpsPrices(wts, coin);
+      if (prices) {
+        vpsPriceWindows++;
+      } else {
+        // Fallback: CLOB API price history
+        const upTokenId = marketInfo.clobTokenIds[0];
+        if (upTokenId) {
+          const history = await fetchPriceHistory(upTokenId, wts, wts + windowSec);
+          prices = history.map(p => ({
+            t: p.t,
+            sec: p.t - wts,
+            p: parseFloat(p.p),
+          }));
+        } else {
+          prices = [];
+        }
 
-      // If API returned no/few prices, derive from trade data
-      // Each trade gives us an Up-equivalent price point
-      if (prices.length < 3) {
-        const allWindowTrades = [];
-        for (const trader of traders) {
-          const s = eventSlug(coin, wts);
-          for (const t of (traderTrades[trader.name] || [])) {
-            if (t.eventSlug === s && t.timestamp >= wts && t.timestamp < wts + windowSec) {
-              allWindowTrades.push(t);
+        // Last fallback: derive from trade data
+        if (prices.length < 3) {
+          const allWindowTrades = [];
+          for (const trader of traders) {
+            const s = eventSlug(coin, wts);
+            for (const t of (traderTrades[trader.name] || [])) {
+              if (t.eventSlug === s && t.timestamp >= wts && t.timestamp < wts + windowSec) {
+                allWindowTrades.push(t);
+              }
             }
           }
-        }
-        allWindowTrades.sort((a, b) => a.timestamp - b.timestamp);
-        const derived = allWindowTrades.map(t => {
-          const outcome = t.outcome || (t.outcomeIndex === 0 ? 'Up' : 'Down');
-          const upPrice = outcome === 'Up' ? t.price : 1 - t.price;
-          return { t: t.timestamp, sec: t.timestamp - wts, p: upPrice };
-        });
-        if (derived.length > prices.length) {
-          prices = derived;
+          allWindowTrades.sort((a, b) => a.timestamp - b.timestamp);
+          const derived = allWindowTrades.map(t => {
+            const outcome = t.outcome || (t.outcomeIndex === 0 ? 'Up' : 'Down');
+            const upPriceVal = outcome === 'Up' ? t.price : 1 - t.price;
+            return { t: t.timestamp, sec: t.timestamp - wts, p: upPriceVal };
+          });
+          if (derived.length > prices.length) {
+            prices = derived;
+          }
         }
       }
 
@@ -464,7 +522,6 @@ async function main() {
       writeFileSync(filepath, JSON.stringify(windowDetail));
       windowsWritten++;
 
-      // Add to manifest
       const entry = {
         windowTs: wts,
         coin,
@@ -487,15 +544,23 @@ async function main() {
   // Sort manifest by time (newest first)
   manifest.sort((a, b) => b.windowTs - a.windowTs);
 
-  // Write manifest
+  // Write manifest (include full trader config for frontend)
   const manifestData = {
     generated: new Date().toISOString(),
     windows: manifest,
-    traders: traders.map(t => ({ address: t.address, name: t.name, color: t.color })),
+    traders: traders.map(t => ({
+      address: t.address,
+      name: t.name,
+      color: t.color,
+      description: t.description || '',
+      profileUrl: t.profileUrl || '',
+      screenshot: t.screenshot || '',
+    })),
   };
   writeFileSync(join(DATA_DIR, 'manifest.json'), JSON.stringify(manifestData, null, 2));
 
   console.log(`\nDone! ${windowsWritten} written, ${windowsCached} cached, ${windowsSkipped} skipped`);
+  console.log(`VPS prices used: ${vpsPriceWindows} windows`);
   console.log(`Manifest: ${manifest.length} windows`);
 }
 
