@@ -6,15 +6,17 @@
       "color": "#58a6ff",
       "description": "The #1 15-minute crypto trader on Polymarket. Buys dips, sells peaks, 142s median hold.",
       "profileUrl": "https://polymarket.com/@distinct-baguette",
-      "screenshot": "baguette_pnl.png"
+      "screenshot": "baguette_pnl.png",
+      "durations": [900]
     },
     {
       "address": "0x37c94ea1b44e01b18a1ce3ab6f8002bd6b9d7e6d",
       "name": "abrak25",
       "color": "#f59e0b",
-      "description": "New high-frequency crypto prediction trader. $13K+ daily P&L since Feb 2026.",
+      "description": "High-frequency 5-minute crypto prediction trader. $13K+ daily P&L since Feb 2026.",
       "profileUrl": "https://polymarket.com/@abrak25",
-      "screenshot": "abrak25_pnl.png"
+      "screenshot": "abrak25_pnl.png",
+      "durations": [300]
     }
   ],
   "coins": ["btc", "eth", "sol", "xrp"],

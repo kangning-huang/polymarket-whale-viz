@@ -448,9 +448,13 @@ async function main() {
         }
       }
 
-      // Check if any trader has trades in this window
+      // Check if any trader has trades in this window (only traders who trade this duration)
       let hasAnyTrades = false;
       for (const trader of traders) {
+        // Skip traders who don't trade this duration
+        const traderDurations = trader.durations || windowDurations;
+        if (!traderDurations.includes(dur)) continue;
+
         const slug = eventSlug(coin, wts, dur);
         const windowTrades = (traderTrades[trader.name] || []).filter(t =>
           t.eventSlug === slug &&
@@ -529,9 +533,13 @@ async function main() {
         }
       }
 
-      // Process trades for each trader
+      // Process trades for each trader (only traders who trade this duration)
       const tradersData = {};
       for (const trader of traders) {
+        // Skip traders who don't trade this duration
+        const traderDurations = trader.durations || windowDurations;
+        if (!traderDurations.includes(dur)) continue;
+
         const result = processWindowTrades(traderTrades[trader.name] || [], wts, coin, dur);
         if (result) {
           computeSettlement(result, settlement);
@@ -597,6 +605,7 @@ async function main() {
       description: t.description || '',
       profileUrl: t.profileUrl || '',
       screenshot: t.screenshot || '',
+      durations: t.durations || windowDurations,
     })),
   };
   writeFileSync(join(DATA_DIR, 'manifest.json'), JSON.stringify(manifestData, null, 2));
