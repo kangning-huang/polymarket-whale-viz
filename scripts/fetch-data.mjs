@@ -108,8 +108,16 @@ function downloadPriceFiles() {
 // ── Step 0b: Load per-second prices from VPS data ──
 
 function loadVpsPrices(windowTs, coin, duration = 900) {
-  const filepath = join(PRICES_DIR, `price_${windowTs}_${coin}.jsonl`);
-  if (!existsSync(filepath)) return null;
+  // Try duration-labeled file first (new format), then legacy format
+  const durLabel = DURATION_LABELS[duration] || `${duration}s`;
+  let filepath = join(PRICES_DIR, `price_${windowTs}_${coin}_${durLabel}.jsonl`);
+  if (!existsSync(filepath)) {
+    // Fallback to legacy format (15m only, no label)
+    if (duration === 900) {
+      filepath = join(PRICES_DIR, `price_${windowTs}_${coin}.jsonl`);
+    }
+    if (!existsSync(filepath)) return null;
+  }
 
   try {
     const lines = readFileSync(filepath, 'utf-8').trim().split('\n');
@@ -481,8 +489,7 @@ async function main() {
       }
 
       // Price priority: VPS per-second > CLOB API > trade-derived
-      // NOTE: VPS only records 15m market prices, so skip VPS for 5m windows
-      let prices = dur === 900 ? loadVpsPrices(wts, coin, dur) : null;
+      let prices = loadVpsPrices(wts, coin, dur);
       if (prices) {
         vpsPriceWindows++;
       } else {
