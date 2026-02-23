@@ -10,7 +10,7 @@
  * Output: public/data/manifest.json + public/data/windows/<ts>_<coin>.json
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync } from 'fs';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -367,6 +367,27 @@ async function main() {
   // Ensure output dirs
   mkdirSync(WINDOWS_DIR, { recursive: true });
   mkdirSync(PRICES_DIR, { recursive: true });
+
+  // One-time cache clear: delete 5m files that may have stale data (prices beyond duration)
+  if (existsSync(WINDOWS_DIR)) {
+    const staleFiles = readdirSync(WINDOWS_DIR).filter(f => f.endsWith('_5m.json'));
+    if (staleFiles.length > 0) {
+      console.log(`\nClearing ${staleFiles.length} stale 5m cache files...`);
+      for (const f of staleFiles) {
+        try {
+          const filepath = join(WINDOWS_DIR, f);
+          const data = JSON.parse(readFileSync(filepath, 'utf-8'));
+          // Check if prices extend beyond duration
+          const maxSec = data.prices?.reduce((m, p) => Math.max(m, p.sec), 0) || 0;
+          const dur = data.duration || 300;
+          if (maxSec >= dur) {
+            console.log(`  Removing stale ${f} (maxSec=${maxSec}, dur=${dur})`);
+            unlinkSync(filepath);
+          }
+        } catch { /* ignore */ }
+      }
+    }
+  }
 
   // Step 0: Download VPS price files
   downloadPriceFiles();
