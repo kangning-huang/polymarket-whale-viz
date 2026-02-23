@@ -146,17 +146,23 @@ export default function PriceChart({ prices, trades, settlement, coin, duration,
     }
 
     // Trade scatter points (Long/Short on the Up outcome)
+    // Convert DOWN trades to UP-equivalent price: 100 - DOWN_price
     datasets.push({
       type: 'scatter' as const,
       label: `Long ${coin.toUpperCase()}-Up`,
-      data: longs.map(t => ({
-        x: t.sec,
-        y: t.price * 100,
-        tokens: t.tokens,
-        usdc: t.usdc,
-        outcome: t.outcome,
-        side: t.side,
-      })),
+      data: longs.map(t => {
+        // For DOWN outcome, flip to UP-equivalent price
+        const upEquivPrice = t.outcome === 'Down' ? (1 - t.price) : t.price;
+        return {
+          x: t.sec,
+          y: upEquivPrice * 100,
+          tokens: t.tokens,
+          usdc: t.usdc,
+          outcome: t.outcome,
+          side: t.side,
+          rawPrice: t.price,
+        };
+      }),
       backgroundColor: theme.green,
       borderColor: theme.green,
       pointRadius: longs.map(t => Math.max(3, Math.min(8, t.tokens / 5))),
@@ -166,14 +172,19 @@ export default function PriceChart({ prices, trades, settlement, coin, duration,
     datasets.push({
       type: 'scatter' as const,
       label: `Short ${coin.toUpperCase()}-Up`,
-      data: shorts.map(t => ({
-        x: t.sec,
-        y: t.price * 100,
-        tokens: t.tokens,
-        usdc: t.usdc,
-        outcome: t.outcome,
-        side: t.side,
-      })),
+      data: shorts.map(t => {
+        // For DOWN outcome, flip to UP-equivalent price
+        const upEquivPrice = t.outcome === 'Down' ? (1 - t.price) : t.price;
+        return {
+          x: t.sec,
+          y: upEquivPrice * 100,
+          tokens: t.tokens,
+          usdc: t.usdc,
+          outcome: t.outcome,
+          side: t.side,
+          rawPrice: t.price,
+        };
+      }),
       backgroundColor: theme.red,
       borderColor: theme.red,
       pointRadius: shorts.map(t => Math.max(3, Math.min(8, t.tokens / 5))),
@@ -229,7 +240,13 @@ export default function PriceChart({ prices, trades, settlement, coin, duration,
           label: (ctx: any) => {
             const raw = ctx.raw;
             if (raw.tokens !== undefined) {
-              return `${raw.side} ${raw.outcome}: ${raw.tokens.toFixed(1)} tokens @ $${(raw.y / 100).toFixed(3)} ($${raw.usdc.toFixed(2)})`;
+              // Show the actual trade (side + outcome) and the UP-equivalent price
+              const upEquivPrice = raw.y / 100;
+              const originalPrice = raw.rawPrice ?? upEquivPrice;
+              const priceNote = raw.outcome === 'Down'
+                ? ` (${raw.outcome} @ ${(originalPrice * 100).toFixed(1)}¢)`
+                : '';
+              return `${raw.side} ${raw.outcome}: ${raw.tokens.toFixed(1)} tokens @ ${raw.y.toFixed(1)}¢${priceNote} ($${raw.usdc.toFixed(2)})`;
             }
             return `${ctx.dataset.label}: ${raw.y.toFixed(1)}c`;
           },
@@ -269,8 +286,9 @@ export default function PriceChart({ prices, trades, settlement, coin, duration,
         </span>}
       </h3>
       <p style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 8, lineHeight: 1.5 }}>
-        <span style={{ color: 'var(--green)', fontWeight: 600 }}>Long {coinUp}</span> = Buy Up shares or Sell Down shares.{' '}
-        <span style={{ color: 'var(--red)', fontWeight: 600 }}>Short {coinUp}</span> = Sell Up shares or Buy Down shares.
+        <span style={{ color: 'var(--green)', fontWeight: 600 }}>Long {coinUp}</span> = Buy Up or Sell Down (betting price goes up).{' '}
+        <span style={{ color: 'var(--red)', fontWeight: 600 }}>Short {coinUp}</span> = Sell Up or Buy Down (betting price goes down).
+        All trades shown in UP-equivalent price.
       </p>
       <div className="chart-wrapper">
         <Chart type="scatter" data={data} options={options} />
