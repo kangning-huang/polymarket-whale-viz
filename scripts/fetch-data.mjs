@@ -255,33 +255,41 @@ async function fetchMarketInfo(slug) {
   };
 }
 
-// Fetch hourly market info by querying the series endpoint and matching by eventStartTime
+// Fetch hourly market info by querying the series endpoint and matching by window timestamp
 async function fetchHourlyMarketInfo(coin, windowTs) {
   const seriesSlug = HOURLY_SERIES[coin];
   if (!seriesSlug) return null;
 
-  const url = `https://gamma-api.polymarket.com/series?slug=${seriesSlug}`;
+  // Step 1: Query series to find event slugs (series endpoint doesn't include markets array)
+  const seriesUrl = `https://gamma-api.polymarket.com/series?slug=${seriesSlug}`;
   await sleep(DELAY_MS);
-  const data = await fetchJson(url);
-  if (!data || !Array.isArray(data) || data.length === 0) return null;
-  if (!data[0].events || data[0].events.length === 0) return null;
+  const seriesData = await fetchJson(seriesUrl);
+  if (!seriesData || !Array.isArray(seriesData) || seriesData.length === 0) return null;
+  if (!seriesData[0].events || seriesData[0].events.length === 0) return null;
 
-  // Find the market matching our window timestamp
-  for (const event of data[0].events) {
+  // Find the event matching our window timestamp
+  for (const event of seriesData[0].events) {
     if (event.closed || !event.active) continue;
-
-    const market = event.markets?.[0];
-    if (!market) continue;
 
     // For hourly markets, endDate is when window closes
     // Window start = endDate - 3600 (1 hour before)
-    const endDateStr = market.endDate || event.endDate;
+    const endDateStr = event.endDate;
     if (!endDateStr) continue;
 
     const endTs = Math.floor(new Date(endDateStr).getTime() / 1000);
     const startTs = endTs - 3600; // 1 hour before end
+
     // Allow some tolerance (within same hour)
     if (Math.abs(startTs - windowTs) < 60) {
+      // Step 2: Query events endpoint to get full market info
+      const eventUrl = `https://gamma-api.polymarket.com/events?slug=${event.slug}`;
+      await sleep(DELAY_MS);
+      const eventData = await fetchJson(eventUrl);
+      if (!eventData || !Array.isArray(eventData) || eventData.length === 0) continue;
+
+      const market = eventData[0].markets?.[0];
+      if (!market) continue;
+
       hourlySlugCache.set(`${windowTs}_${coin}`, market.slug);
       return {
         conditionId: market.conditionId,
