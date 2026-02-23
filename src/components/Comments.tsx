@@ -1,37 +1,33 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
 interface Props {
   botName: string;
 }
 
+declare global {
+  interface Window {
+    disqus_config: () => void;
+    DISQUS: { reset: (opts: { reload: boolean }) => void } | undefined;
+  }
+}
+
 export default function Comments({ botName }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    if (!ref.current) return;
+    window.disqus_config = function (this: any) {
+      this.page.url = `https://kangning-huang.github.io/polymarket-whale-viz/#/bot/${botName}`;
+      this.page.identifier = `bot-${botName}`;
+      this.page.title = `Bot: ${botName}`;
+    };
 
-    // Clear previous giscus instance
-    ref.current.innerHTML = '';
-
-    const script = document.createElement('script');
-    script.src = 'https://giscus.app/client.js';
-    script.setAttribute('data-repo', 'kangning-huang/polymarket-whale-viz');
-    script.setAttribute('data-repo-id', 'R_kgDORWdvrw');
-    script.setAttribute('data-category', 'General');
-    script.setAttribute('data-category-id', 'DIC_kwDORWdvr84C3B0m');
-    script.setAttribute('data-mapping', 'specific');
-    script.setAttribute('data-term', `Bot: ${botName}`);
-    script.setAttribute('data-strict', '0');
-    script.setAttribute('data-reactions-enabled', '1');
-    script.setAttribute('data-emit-metadata', '0');
-    script.setAttribute('data-input-position', 'top');
-    script.setAttribute('data-theme', 'dark_dimmed');
-    script.setAttribute('data-lang', 'en');
-    script.setAttribute('data-loading', 'lazy');
-    script.crossOrigin = 'anonymous';
-    script.async = true;
-
-    ref.current.appendChild(script);
+    if (window.DISQUS) {
+      window.DISQUS.reset({ reload: true });
+    } else {
+      const script = document.createElement('script');
+      script.src = 'https://polymarket-whale-viz.disqus.com/embed.js';
+      script.setAttribute('data-timestamp', String(+new Date()));
+      script.async = true;
+      document.body.appendChild(script);
+    }
   }, [botName]);
 
   return (
@@ -40,7 +36,7 @@ export default function Comments({ botName }: Props) {
       <p className="comments-hint">
         What strategy is this bot using? Share your analysis below.
       </p>
-      <div ref={ref} />
+      <div id="disqus_thread" />
     </div>
   );
 }

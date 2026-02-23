@@ -48,7 +48,7 @@ export default function StatsCards({ stats, winner }: Props) {
       </div>
       <div className="stat-card">
         <div className="stat-label">Winner</div>
-        <div className="stat-value" style={{ color: winner === 'Up' ? '#3fb950' : '#f85149' }}>
+        <div className="stat-value" style={{ color: winner === 'Up' ? 'var(--green)' : 'var(--red)' }}>
           {winner}
         </div>
       </div>

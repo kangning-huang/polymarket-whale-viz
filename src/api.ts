@@ -36,7 +36,7 @@ export function coinLabel(coin: string): string {
 }
 
 export function pnlColor(pnl: number): string {
-  if (pnl > 0) return '#3fb950';
-  if (pnl < 0) return '#f85149';
-  return '#8b949e';
+  if (pnl > 0) return 'var(--green)';
+  if (pnl < 0) return 'var(--red)';
+  return 'var(--text-secondary)';
 }

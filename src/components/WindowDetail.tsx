@@ -27,7 +27,7 @@ export default function WindowDetailView({ detail, traders }: Props) {
           {formatDate(detail.windowTs)} {formatTime(detail.windowTs)}&ndash;{formatTime(windowEnd)} UTC
         </h2>
         <div className="settlement-badge" style={{
-          color: detail.settlement.winner === 'Up' ? '#3fb950' : '#f85149'
+          color: detail.settlement.winner === 'Up' ? 'var(--green)' : 'var(--red)'
         }}>
           {detail.settlement.winner} wins ({(detail.settlement.upPrice * 100).toFixed(0)}c / {(detail.settlement.downPrice * 100).toFixed(0)}c)
         </div>
