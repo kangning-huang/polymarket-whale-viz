@@ -429,20 +429,30 @@ async function main() {
       if (cacheFile) {
         try {
           const cached = JSON.parse(readFileSync(cacheFile, 'utf-8'));
-          const entry = { windowTs: wts, coin, duration: dur, priceCount: cached.prices?.length ?? 0, traders: [] };
-          for (const [name, data] of Object.entries(cached.traders || {})) {
-            entry.traders.push({
-              name,
-              buyCount: data.stats?.buyCount ?? 0,
-              sellCount: data.stats?.sellCount ?? 0,
-              netPnl: data.stats?.netPnl ?? 0,
-            });
+          const priceCount = cached.prices?.length ?? 0;
+          const minPricePoints = Math.floor(dur * 0.8);
+
+          // Delete cache files with incomplete price data (they'll be re-fetched)
+          if (priceCount < minPricePoints) {
+            console.log(`  Removing incomplete cache ${cacheFile.split('/').pop()} (${priceCount}/${dur} prices)`);
+            try { unlinkSync(cacheFile); } catch { /* ignore */ }
+            // Continue to re-fetch this window
+          } else {
+            const entry = { windowTs: wts, coin, duration: dur, priceCount, traders: [] };
+            for (const [name, data] of Object.entries(cached.traders || {})) {
+              entry.traders.push({
+                name,
+                buyCount: data.stats?.buyCount ?? 0,
+                sellCount: data.stats?.sellCount ?? 0,
+                netPnl: data.stats?.netPnl ?? 0,
+              });
+            }
+            if (entry.traders.length > 0) {
+              manifest.push(entry);
+            }
+            windowsCached++;
+            continue;
           }
-          if (entry.traders.length > 0) {
-            manifest.push(entry);
-          }
-          windowsCached++;
-          continue;
         } catch {
           // Corrupted cache, re-fetch
         }
@@ -552,6 +562,14 @@ async function main() {
       }
 
       if (Object.keys(tradersData).length === 0) {
+        windowsSkipped++;
+        continue;
+      }
+
+      // Filter out windows with incomplete price data (require 80% coverage)
+      const minPricePoints = Math.floor(dur * 0.8);
+      if (prices.length < minPricePoints) {
+        console.log(`  Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — incomplete prices (${prices.length}/${dur}, need ${minPricePoints})`);
         windowsSkipped++;
         continue;
       }
