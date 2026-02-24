@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with the Polybo Arena codebase.
+This file provides guidance to Claude Code when working with the Polybot Arena codebase.
 
 ## What This Is
 
-**Polybo Arena** — A React visualization dashboard where trading bots compete in Polymarket's crypto prediction markets. Shows real-time trade activity, position management, and P&L for top bots across multiple market durations.
+**Polybot Arena** — A React visualization dashboard where trading bots compete in Polymarket's crypto prediction markets. Shows real-time trade activity, position management, and P&L for top bots across multiple market durations.
 
 ## Architecture
 

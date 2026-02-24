@@ -7,24 +7,24 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Core backgrounds
-        void: '#08090a',
-        surface: '#111214',
-        elevated: '#18191c',
-        hover: '#1e2023',
+        // Core backgrounds - use CSS variables for theme switching
+        void: 'var(--color-void)',
+        surface: 'var(--color-surface)',
+        elevated: 'var(--color-elevated)',
+        hover: 'var(--color-hover)',
 
         // Grid & borders
-        grid: '#1a1d20',
-        border: '#262a2e',
-        'border-subtle': '#1e2124',
+        grid: 'var(--color-grid)',
+        border: 'var(--color-border)',
+        'border-subtle': 'var(--color-border-subtle)',
 
         // Text
-        'text-primary': '#e4e4e7',
-        'text-secondary': '#a1a1aa',
-        'text-muted': '#71717a',
-        'text-dim': '#52525b',
+        'text-primary': 'var(--color-text-primary)',
+        'text-secondary': 'var(--color-text-secondary)',
+        'text-muted': 'var(--color-text-muted)',
+        'text-dim': 'var(--color-text-dim)',
 
-        // Trading colors
+        // Trading colors (same in both themes for consistency)
         long: {
           DEFAULT: '#22c55e',
           glow: '#4ade80',
@@ -38,7 +38,7 @@ export default {
           border: 'rgba(239, 68, 68, 0.3)',
         },
 
-        // Accent colors
+        // Accent colors (same in both themes)
         price: '#3b82f6',
         'price-glow': '#60a5fa',
         accent: '#6366f1',
@@ -97,16 +97,16 @@ export default {
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'grid-pattern': 'linear-gradient(to right, #1a1d20 1px, transparent 1px), linear-gradient(to bottom, #1a1d20 1px, transparent 1px)',
-        'shimmer-gradient': 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.05) 50%, transparent 100%)',
+        'grid-pattern': 'linear-gradient(to right, var(--color-grid) 1px, transparent 1px), linear-gradient(to bottom, var(--color-grid) 1px, transparent 1px)',
+        'shimmer-gradient': 'linear-gradient(90deg, transparent 0%, var(--color-shimmer-highlight) 50%, transparent 100%)',
       },
       boxShadow: {
         'glow-long': '0 0 20px rgba(34, 197, 94, 0.3)',
         'glow-short': '0 0 20px rgba(239, 68, 68, 0.3)',
         'glow-price': '0 0 20px rgba(59, 130, 246, 0.3)',
         'glow-gold': '0 0 30px rgba(245, 158, 11, 0.4)',
-        'card': '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3)',
-        'card-hover': '0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3)',
+        'card': '0 4px 6px -1px var(--color-card-shadow), 0 2px 4px -2px var(--color-card-shadow)',
+        'card-hover': '0 10px 25px -5px var(--color-card-hover-shadow), 0 8px 10px -6px var(--color-card-hover-shadow)',
       },
       backdropBlur: {
         xs: '2px',

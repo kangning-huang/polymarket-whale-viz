@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * fetch-data.mjs — Data pipeline for Polybo Arena
+ * fetch-data.mjs — Data pipeline for Polybot Arena
  *
  * Fetches trader activity from Polymarket public APIs for the last 24h,
  * downloads per-second price data from VPS (if available),
@@ -434,7 +434,7 @@ function computeSettlement(traderData, settlement) {
 // ── Main pipeline ──
 
 async function main() {
-  console.log('Polybo Arena — Data Pipeline');
+  console.log('Polybot Arena — Data Pipeline');
   console.log(`Traders: ${traders.map(t => t.name).join(', ')}`);
   console.log(`Coins: ${coins.join(', ')}`);
   console.log(`Lookback: ${lookbackHours}h`);

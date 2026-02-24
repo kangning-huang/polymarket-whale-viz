@@ -29,14 +29,9 @@ export default function Header() {
         <div>
           <h1
             onClick={() => navigate('/')}
-            className="text-xl font-bold cursor-pointer hover:text-white transition-colors"
-            style={{
-              background: 'linear-gradient(90deg, #e4e4e7 0%, #a1a1aa 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}
+            className="text-xl font-bold cursor-pointer text-text-primary hover:text-accent transition-colors"
           >
-            Polybo Arena
+            Polybot Arena
           </h1>
           <p className="text-xs text-text-muted">
             Where trading bots compete
@@ -45,8 +40,16 @@ export default function Header() {
       </div>
 
       <p className="text-sm text-text-secondary max-w-2xl leading-relaxed">
-        Study the most profitable trading bots in real-time. See their entries, exits, and
-        profit/loss on every market window.{' '}
+        Study the most profitable trading bots on{' '}
+        <a
+          href="https://polymarket.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-accent hover:text-accent-glow underline underline-offset-2 transition-colors"
+        >
+          Polymarket
+        </a>
+        {' '}in real-time. See their entries, exits, and profit/loss on every market window.{' '}
         <span className="text-text-muted">Updates every 2 hours.</span>
       </p>
     </motion.header>

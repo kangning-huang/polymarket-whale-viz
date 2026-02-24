@@ -1,4 +1,4 @@
-# Polybo Arena
+# Polybot Arena
 
 **Live site: https://polybot-arena.com**
 

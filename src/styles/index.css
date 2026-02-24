@@ -5,6 +5,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme CSS Variables */
+:root {
+  /* Dark theme (default) */
+  --color-void: #08090a;
+  --color-surface: #111214;
+  --color-elevated: #18191c;
+  --color-hover: #1e2023;
+  --color-grid: #1a1d20;
+  --color-border: #262a2e;
+  --color-border-subtle: #1e2124;
+  --color-text-primary: #e4e4e7;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #71717a;
+  --color-text-dim: #52525b;
+  --color-card-shadow: rgba(0, 0, 0, 0.3);
+  --color-card-hover-shadow: rgba(0, 0, 0, 0.4);
+  --color-shimmer-highlight: rgba(255, 255, 255, 0.05);
+  --scrollbar-track: #08090a;
+  --scrollbar-thumb: #262a2e;
+  --scrollbar-thumb-hover: #52525b;
+}
+
+/* Light theme */
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-void: #f8fafc;
+    --color-surface: #ffffff;
+    --color-elevated: #f1f5f9;
+    --color-hover: #e2e8f0;
+    --color-grid: #e2e8f0;
+    --color-border: #cbd5e1;
+    --color-border-subtle: #e2e8f0;
+    --color-text-primary: #1e293b;
+    --color-text-secondary: #475569;
+    --color-text-muted: #64748b;
+    --color-text-dim: #94a3b8;
+    --color-card-shadow: rgba(0, 0, 0, 0.08);
+    --color-card-hover-shadow: rgba(0, 0, 0, 0.12);
+    --color-shimmer-highlight: rgba(0, 0, 0, 0.03);
+    --scrollbar-track: #f8fafc;
+    --scrollbar-thumb: #cbd5e1;
+    --scrollbar-thumb-hover: #94a3b8;
+  }
+}
+
 @layer base {
   * {
     box-sizing: border-box;
@@ -27,15 +72,16 @@
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-void;
+    background: var(--scrollbar-track);
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-border rounded-full;
+    background: var(--scrollbar-thumb);
+    border-radius: 9999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-text-dim;
+    background: var(--scrollbar-thumb-hover);
   }
 }
 
@@ -152,7 +198,9 @@
   }
 
   .timeline-segment.active {
-    @apply ring-2 ring-white/50 ring-offset-2 ring-offset-void h-3;
+    @apply ring-2 ring-offset-2 h-3;
+    --tw-ring-color: rgba(255, 255, 255, 0.5);
+    --tw-ring-offset-color: var(--color-void);
   }
 
   /* Chart container */
@@ -172,8 +220,8 @@
   .chart-grid-overlay {
     @apply absolute inset-0 pointer-events-none;
     background-image:
-      linear-gradient(to right, theme('colors.grid') 1px, transparent 1px),
-      linear-gradient(to bottom, theme('colors.grid') 1px, transparent 1px);
+      linear-gradient(to right, var(--color-grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--color-grid) 1px, transparent 1px);
     background-size: 60px 40px;
     opacity: 0.5;
   }
@@ -183,9 +231,9 @@
     @apply relative overflow-hidden;
     background: linear-gradient(
       90deg,
-      theme('colors.surface') 0%,
-      theme('colors.elevated') 50%,
-      theme('colors.surface') 100%
+      var(--color-surface) 0%,
+      var(--color-elevated) 50%,
+      var(--color-surface) 100%
     );
     background-size: 200% 100%;
     animation: shimmer 1.5s linear infinite;
