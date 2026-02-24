@@ -1,6 +1,6 @@
 # Polybo Arena
 
-**Live site: https://polybot-arena.com** (coming soon)
+**Live site: https://polybot-arena.com**
 
 Watch elite trading bots compete in [Polymarket](https://polymarket.com) crypto prediction markets. Study their strategies, entries, exits, and P&L in real-time.
 
