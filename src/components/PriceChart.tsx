@@ -44,6 +44,7 @@ function PriceChartInner({
   height,
 }: Props & { width: number; height: number }) {
   const [hoveredTrade, setHoveredTrade] = useState<number | null>(null);
+  const [selectedTrade, setSelectedTrade] = useState<number | null>(null);
   const [cursorX, setCursorX] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -117,8 +118,8 @@ function PriceChartInner({
 
   // Mouse handlers
   const handleMouseMove = useCallback((event: React.MouseEvent<SVGSVGElement>) => {
-    // Don't show price tooltip if hovering over a trade
-    if (hoveredTrade !== null) return;
+    // Don't show price tooltip if hovering over a trade or a trade is selected
+    if (hoveredTrade !== null || selectedTrade !== null) return;
 
     const point = localPoint(event);
     if (!point) return;
@@ -147,9 +148,10 @@ function PriceChartInner({
       tooltipLeft: point.x,
       tooltipTop: point.y,
     });
-  }, [prices, xScale, yScale, showTooltip, hoveredTrade]);
+  }, [prices, xScale, yScale, showTooltip, hoveredTrade, selectedTrade]);
 
   const handleTradeHover = useCallback((trade: typeof processedTrades[0], index: number, event: React.MouseEvent) => {
+    if (selectedTrade !== null) return; // Don't hover if a trade is selected
     setHoveredTrade(index);
     const point = localPoint(event);
     if (!point) return;
@@ -164,7 +166,31 @@ function PriceChartInner({
       tooltipLeft: point.x,
       tooltipTop: point.y - 10,
     });
-  }, [xScale, yScale, showTooltip]);
+  }, [xScale, yScale, showTooltip, selectedTrade]);
+
+  const handleTradeClick = useCallback((trade: typeof processedTrades[0], index: number, event: React.MouseEvent) => {
+    event.stopPropagation();
+    // Toggle selection
+    if (selectedTrade === index) {
+      setSelectedTrade(null);
+      hideTooltip();
+    } else {
+      setSelectedTrade(index);
+      const point = localPoint(event);
+      if (!point) return;
+
+      showTooltip({
+        tooltipData: {
+          type: 'trade',
+          x: xScale(trade.sec),
+          y: yScale(trade.upEquivPrice * 100),
+          trade,
+        },
+        tooltipLeft: point.x,
+        tooltipTop: point.y - 10,
+      });
+    }
+  }, [xScale, yScale, showTooltip, hideTooltip, selectedTrade]);
 
   // Format time
   const formatTime = (sec: number) => {
@@ -181,9 +207,18 @@ function PriceChartInner({
         height={height}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => {
-          hideTooltip();
+          if (selectedTrade === null) {
+            hideTooltip();
+          }
           setCursorX(null);
           setHoveredTrade(null);
+        }}
+        onClick={() => {
+          // Click on empty area to deselect
+          if (selectedTrade !== null) {
+            setSelectedTrade(null);
+            hideTooltip();
+          }
         }}
         className="select-none"
       >
@@ -346,7 +381,9 @@ function PriceChartInner({
             const cy = yScale(trade.upEquivPrice * 100);
             const radius = Math.max(4, Math.min(10, trade.tokens / 5));
             const isHovered = hoveredTrade === i;
-            const isOtherHovered = hoveredTrade !== null && hoveredTrade !== i;
+            const isSelected = selectedTrade === i;
+            const isOtherActive = (hoveredTrade !== null && hoveredTrade !== i) ||
+                                  (selectedTrade !== null && selectedTrade !== i);
 
             return (
               <motion.circle
@@ -356,10 +393,12 @@ function PriceChartInner({
                 r={radius}
                 fill={trade.isLong ? '#22c55e' : '#ef4444'}
                 filter={trade.isLong ? 'url(#longGlow)' : 'url(#shortGlow)'}
+                stroke={isSelected ? '#fff' : 'none'}
+                strokeWidth={isSelected ? 2 : 0}
                 initial={{ scale: 0, opacity: 0 }}
                 animate={{
-                  scale: isHovered ? 1.4 : 1,
-                  opacity: isOtherHovered ? 0.3 : 1
+                  scale: isHovered || isSelected ? 1.4 : 1,
+                  opacity: isOtherActive ? 0.3 : 1
                 }}
                 transition={{
                   type: "spring",
@@ -374,8 +413,11 @@ function PriceChartInner({
                 onMouseLeave={(e) => {
                   e.stopPropagation();
                   setHoveredTrade(null);
-                  hideTooltip();
+                  if (selectedTrade === null) {
+                    hideTooltip();
+                  }
                 }}
+                onClick={(e) => handleTradeClick(trade, i, e)}
                 style={{ cursor: 'pointer' }}
               />
             );
