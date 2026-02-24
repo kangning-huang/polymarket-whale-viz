@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import { motion, useScroll, useTransform, useInView } from 'framer-motion';
 import { fetchManifest } from './api';
 import type { Manifest } from './types';
+import { useIsDarkMode } from './theme';
 import Header from './components/Header';
 import BotCard from './components/BotCard';
 import BotPage from './components/BotPage';
@@ -42,6 +43,7 @@ function Reveal({
 
 function Landing() {
   const navigate = useNavigate();
+  const isDarkMode = useIsDarkMode();
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -121,7 +123,10 @@ function Landing() {
           style={{ y: bannerY, scale: bannerScale, opacity: bannerOpacity }}
         >
           <img
-            src="/images/banner short light high-res-v3.jpg"
+            src={isDarkMode
+              ? '/images/banner short dark high-res-v3.png'
+              : '/images/banner short light high-res-v3.jpg'
+            }
             alt="Polybot Arena — Trading bots competing in a neon-lit arena"
             className="absolute inset-0 w-full h-full object-cover object-top select-none pointer-events-none"
             draggable={false}

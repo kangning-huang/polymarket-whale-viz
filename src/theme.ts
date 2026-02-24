@@ -4,6 +4,21 @@ function readCSSVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+export function useIsDarkMode(): boolean {
+  const [isDark, setIsDark] = useState(() =>
+    !window.matchMedia('(prefers-color-scheme: light)').matches
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const handler = (e: MediaQueryListEvent) => setIsDark(!e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  return isDark;
+}
+
 export function useThemeColors() {
   const [colors, setColors] = useState(() => read());
 
