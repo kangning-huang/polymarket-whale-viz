@@ -121,7 +121,7 @@ function Landing() {
           style={{ y: bannerY, scale: bannerScale, opacity: bannerOpacity }}
         >
           <img
-            src="/images/banner short light high-res-v3.png"
+            src="/images/banner short light high-res-v3.jpg"
             alt="Polybot Arena — Trading bots competing in a neon-lit arena"
             className="absolute inset-0 w-full h-full object-cover object-top select-none pointer-events-none"
             draggable={false}
