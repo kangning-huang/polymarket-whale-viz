@@ -61,76 +61,92 @@ function Landing() {
   }
 
   return (
-    <div className="min-h-screen relative">
-      {/* Hero banner — full-bleed background, fades into void */}
+    <div className="min-h-screen">
+      {/* ── Hero banner ── */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.8 }}
-        className="absolute inset-x-0 top-0 -z-10 overflow-hidden"
-        style={{ height: '420px' }}
+        transition={{ duration: 0.6 }}
+        className="relative w-full overflow-hidden"
       >
-        <img
-          src="/images/banner short light.png"
-          alt=""
-          className="w-full h-full object-cover object-bottom select-none pointer-events-none"
-          draggable={false}
-        />
-        {/* Bottom fade — blends into page background */}
+        {/* Banner image — crops browser chrome from top */}
+        <div className="relative w-full overflow-hidden" style={{ height: 'clamp(180px, 28vw, 360px)' }}>
+          <img
+            src="/images/banner short light.png"
+            alt="Polybot Arena — Trading bots competing in a neon-lit arena"
+            className="absolute inset-0 w-full h-[140%] object-cover object-bottom select-none pointer-events-none"
+            draggable={false}
+          />
+        </div>
+        {/* Bottom gradient — seamless blend into content background */}
         <div
           className="absolute bottom-0 left-0 right-0 pointer-events-none"
           style={{
-            height: '60%',
-            background: 'linear-gradient(to top, var(--color-void) 0%, var(--color-void) 10%, transparent 100%)',
-          }}
-        />
-        {/* Top fade — subtle vignette */}
-        <div
-          className="absolute top-0 left-0 right-0 h-16 pointer-events-none"
-          style={{
-            background: 'linear-gradient(to bottom, var(--color-void), transparent)',
+            height: '50%',
+            background: 'linear-gradient(to top, var(--color-void), transparent)',
           }}
         />
       </motion.div>
 
-      <div className="relative p-6">
-        <div className="max-w-6xl mx-auto">
-          <Header />
+      {/* ── Content area ── */}
+      <div className="relative bg-void">
+        <div className="max-w-6xl mx-auto px-6">
+          {/* Compact header — no title duplication (banner has it) */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="pb-6 pt-2"
+          >
+            <p className="text-sm text-text-secondary max-w-2xl leading-relaxed">
+              Study the most profitable trading bots on{' '}
+              <a
+                href="https://polymarket.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent hover:text-accent-glow underline underline-offset-2 transition-colors"
+              >
+                Polymarket
+              </a>
+              {' '}in real-time. See their entries, exits, and profit/loss on every market window.{' '}
+              <span className="text-text-muted">Updates every 2 hours.</span>
+            </p>
+          </motion.div>
 
-        {/* Bot grid */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-        >
-          {manifest.traders.map((bot, index) => (
-            <BotCard
-              key={bot.name}
-              bot={bot}
-              windows={manifest.windows}
-              onClick={() => navigate(`/bot/${bot.name}`)}
-              index={index}
-            />
-          ))}
-        </motion.div>
+          {/* Bot grid */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            {manifest.traders.map((bot, index) => (
+              <BotCard
+                key={bot.name}
+                bot={bot}
+                windows={manifest.windows}
+                onClick={() => navigate(`/bot/${bot.name}`)}
+                index={index}
+              />
+            ))}
+          </motion.div>
 
-        {/* Suggest a bot section */}
-        <div className="mt-12">
-          <SuggestBot />
-        </div>
+          {/* Suggest a bot section */}
+          <div className="mt-12">
+            <SuggestBot />
+          </div>
 
-        {/* Footer */}
-        <motion.footer
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="mt-12 pt-6 border-t border-border text-center"
-        >
-          <p className="text-text-muted text-xs">
-            Data sourced from Polymarket CLOB. Not financial advice.
-          </p>
-        </motion.footer>
+          {/* Footer */}
+          <motion.footer
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="mt-12 pt-6 pb-8 border-t border-border text-center"
+          >
+            <p className="text-text-muted text-xs">
+              Data sourced from Polymarket CLOB. Not financial advice.
+            </p>
+          </motion.footer>
         </div>
       </div>
     </div>
