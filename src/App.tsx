@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, useScroll, useTransform, useInView } from 'framer-motion';
 import { fetchManifest } from './api';
 import type { Manifest } from './types';
 import Header from './components/Header';
@@ -8,10 +8,57 @@ import BotCard from './components/BotCard';
 import BotPage from './components/BotPage';
 import SuggestBot from './components/SuggestBot';
 
+/* ── Scroll-reveal wrapper ─────────────────────────────────── */
+function Reveal({
+  children,
+  className = '',
+  delay = 0,
+  y = 60,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  delay?: number;
+  y?: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: '-80px' });
+
+  return (
+    <motion.div
+      ref={ref}
+      className={className}
+      initial={{ opacity: 0, y }}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y }}
+      transition={{
+        duration: 0.8,
+        delay,
+        ease: [0.25, 0.1, 0.25, 1],
+      }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 function Landing() {
   const navigate = useNavigate();
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  /* ── Parallax refs ── */
+  const heroRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ['start start', 'end start'],
+  });
+
+  // Banner parallax: image moves slower than scroll, fades out
+  const bannerY = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
+  const bannerOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
+  const bannerScale = useTransform(scrollYProgress, [0, 1], [1, 1.08]);
+
+  // Scroll indicator fades out quickly
+  const chevronOpacity = useTransform(scrollYProgress, [0, 0.15], [1, 0]);
 
   useEffect(() => {
     fetchManifest()
@@ -62,43 +109,61 @@ function Landing() {
 
   return (
     <div className="min-h-screen">
-      {/* ── Hero banner ── */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6 }}
+      {/* ━━━━━━━━━━━━━━━ HERO — full-impact parallax banner ━━━━━━━━━━━━━━━ */}
+      <div
+        ref={heroRef}
         className="relative w-full overflow-hidden"
+        style={{ height: 'clamp(280px, 50vw, 520px)' }}
       >
-        {/* Banner image — crops browser chrome from top */}
-        <div className="relative w-full overflow-hidden" style={{ height: 'clamp(180px, 28vw, 360px)' }}>
+        {/* Parallax banner image */}
+        <motion.div
+          className="absolute inset-0 will-change-transform"
+          style={{ y: bannerY, scale: bannerScale, opacity: bannerOpacity }}
+        >
           <img
             src="/images/banner short light.png"
             alt="Polybot Arena — Trading bots competing in a neon-lit arena"
-            className="absolute inset-0 w-full h-[140%] object-cover object-bottom select-none pointer-events-none"
+            className="absolute inset-0 w-full h-[130%] object-cover object-bottom select-none pointer-events-none"
             draggable={false}
           />
-        </div>
-        {/* Bottom gradient — seamless blend into content background */}
+        </motion.div>
+
+        {/* Bottom gradient — seamless blend into content */}
         <div
           className="absolute bottom-0 left-0 right-0 pointer-events-none"
           style={{
-            height: '50%',
+            height: '60%',
             background: 'linear-gradient(to top, var(--color-void), transparent)',
           }}
         />
-      </motion.div>
 
-      {/* ── Content area ── */}
+        {/* Scroll indicator chevron */}
+        <motion.div
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-none"
+          style={{ opacity: chevronOpacity }}
+        >
+          <span className="text-text-muted text-xs tracking-widest uppercase">Scroll</span>
+          <motion.svg
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+            className="text-text-muted"
+            animate={{ y: [0, 6, 0] }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <path d="M4 7l6 6 6-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </motion.svg>
+        </motion.div>
+      </div>
+
+      {/* ━━━━━━━━━━━━━━━ CONTENT — scroll-revealed sections ━━━━━━━━━━━━━━━ */}
       <div className="relative bg-void">
         <div className="max-w-6xl mx-auto px-6">
-          {/* Compact header — no title duplication (banner has it) */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="pb-6 pt-2"
-          >
-            <p className="text-sm text-text-secondary max-w-2xl leading-relaxed">
+
+          {/* ── Tagline ── */}
+          <Reveal className="pb-10 pt-4">
+            <p className="text-base md:text-lg text-text-secondary max-w-2xl leading-relaxed">
               Study the most profitable trading bots on{' '}
               <a
                 href="https://polymarket.com"
@@ -111,42 +176,41 @@ function Landing() {
               {' '}in real-time. See their entries, exits, and profit/loss on every market window.{' '}
               <span className="text-text-muted">Updates every 2 hours.</span>
             </p>
-          </motion.div>
+          </Reveal>
 
-          {/* Bot grid */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.5 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-          >
+          {/* ── Section label ── */}
+          <Reveal className="mb-8" y={30}>
+            <h2 className="text-xs font-mono uppercase tracking-[0.2em] text-text-dim">
+              Active Bots
+            </h2>
+            <div className="mt-2 h-px w-16 bg-gradient-to-r from-accent to-transparent" />
+          </Reveal>
+
+          {/* ── Bot grid — each card reveals on scroll ── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {manifest.traders.map((bot, index) => (
-              <BotCard
-                key={bot.name}
-                bot={bot}
-                windows={manifest.windows}
-                onClick={() => navigate(`/bot/${bot.name}`)}
-                index={index}
-              />
+              <Reveal key={bot.name} delay={index * 0.1} y={40}>
+                <BotCard
+                  bot={bot}
+                  windows={manifest.windows}
+                  onClick={() => navigate(`/bot/${bot.name}`)}
+                  index={index}
+                />
+              </Reveal>
             ))}
-          </motion.div>
-
-          {/* Suggest a bot section */}
-          <div className="mt-12">
-            <SuggestBot />
           </div>
 
-          {/* Footer */}
-          <motion.footer
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="mt-12 pt-6 pb-8 border-t border-border text-center"
-          >
+          {/* ── Suggest a bot ── */}
+          <Reveal className="mt-20" y={50}>
+            <SuggestBot />
+          </Reveal>
+
+          {/* ── Footer ── */}
+          <Reveal className="mt-16 pt-6 pb-8 border-t border-border text-center" y={20}>
             <p className="text-text-muted text-xs">
               Data sourced from Polymarket CLOB. Not financial advice.
             </p>
-          </motion.footer>
+          </Reveal>
         </div>
       </div>
     </div>

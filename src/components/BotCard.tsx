@@ -59,9 +59,6 @@ export default function BotCard({ bot, windows, onClick, index }: Props) {
     <motion.button
       onClick={onClick}
       className="group relative w-full text-left"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1, duration: 0.4 }}
       whileHover={{ y: -4 }}
       whileTap={{ scale: 0.98 }}
     >
