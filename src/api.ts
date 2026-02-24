@@ -8,7 +8,7 @@ export async function fetchManifest(): Promise<Manifest> {
   return res.json();
 }
 
-const DURATION_LABELS: Record<number, string> = { 900: '15m', 300: '5m' };
+const DURATION_LABELS: Record<number, string> = { 900: '15m', 300: '5m', 3600: '1h' };
 
 export async function fetchWindowDetail(windowTs: number, coin: string, duration?: number): Promise<WindowDetail> {
   // Try duration-labeled filename first, fall back to legacy

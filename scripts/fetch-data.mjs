@@ -73,6 +73,8 @@ async function fetchJson(url, retries = MAX_RETRIES) {
 }
 
 function windowForTs(ts, dur = windowSec) {
+  // Hourly markets align to UTC hours, not to refTs
+  if (dur === 3600) return Math.floor(ts / 3600) * 3600;
   return Math.floor((ts - refTs) / dur) * dur + refTs;
 }
 
@@ -267,10 +269,8 @@ async function fetchHourlyMarketInfo(coin, windowTs) {
   if (!seriesData || !Array.isArray(seriesData) || seriesData.length === 0) return null;
   if (!seriesData[0].events || seriesData[0].events.length === 0) return null;
 
-  // Find the event matching our window timestamp
+  // Find the event matching our window timestamp (include closed events)
   for (const event of seriesData[0].events) {
-    if (event.closed || !event.active) continue;
-
     // For hourly markets, endDate is when window closes
     // Window start = endDate - 3600 (1 hour before)
     const endDateStr = event.endDate;
@@ -307,7 +307,8 @@ async function fetchHourlyMarketInfo(coin, windowTs) {
 // ── Step 4: Fetch price history ──
 
 async function fetchPriceHistory(tokenId, startTs, endTs) {
-  const url = `https://clob.polymarket.com/prices-history?market=${tokenId}&startTs=${startTs}&endTs=${endTs}&fidelity=60`;
+  // Use fidelity=1 — short-lived markets (5m/15m) return 0 points at fidelity=60
+  const url = `https://clob.polymarket.com/prices-history?market=${tokenId}&startTs=${startTs}&endTs=${endTs}&fidelity=1`;
   await sleep(DELAY_MS);
   const data = await fetchJson(url);
   if (!data || !data.history) return [];
@@ -585,7 +586,7 @@ async function main() {
       if (prices) {
         vpsPriceWindows++;
       } else {
-        // Fallback: fetch from CLOB API (60s fidelity)
+        // Fallback: fetch from CLOB API (1s fidelity)
         const upTokenId = marketInfo.clobTokenIds[0];
         if (upTokenId) {
           const history = await fetchPriceHistory(upTokenId, wts, wts + dur);
