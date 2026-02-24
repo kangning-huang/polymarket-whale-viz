@@ -6,6 +6,7 @@ import type { Manifest } from './types';
 import Header from './components/Header';
 import BotCard from './components/BotCard';
 import BotPage from './components/BotPage';
+import SuggestBot from './components/SuggestBot';
 
 function Landing() {
   const navigate = useNavigate();
@@ -81,6 +82,11 @@ function Landing() {
             />
           ))}
         </motion.div>
+
+        {/* Suggest a bot section */}
+        <div className="mt-12">
+          <SuggestBot />
+        </div>
 
         {/* Footer */}
         <motion.footer
