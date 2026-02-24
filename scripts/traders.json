@@ -24,7 +24,7 @@
       "color": "#a855f7",
       "description": "Hourly crypto market trader. Trades BTC, ETH, SOL, XRP on 1-hour prediction windows.",
       "profileUrl": "https://polymarket.com/@0x8dxd",
-      "screenshot": "",
+      "screenshot": "0x8dxd_pnl.png",
       "durations": [3600]
     },
     {
@@ -33,7 +33,7 @@
       "color": "#10b981",
       "description": "5-minute crypto prediction trader on Polymarket.",
       "profileUrl": "https://polymarket.com/@vague-sourdough",
-      "screenshot": "",
+      "screenshot": "vague-sourdough_pnl.png",
       "durations": [300]
     }
   ],
