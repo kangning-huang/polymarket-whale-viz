@@ -117,6 +117,9 @@ function PriceChartInner({
 
   // Mouse handlers
   const handleMouseMove = useCallback((event: React.MouseEvent<SVGSVGElement>) => {
+    // Don't show price tooltip if hovering over a trade
+    if (hoveredTrade !== null) return;
+
     const point = localPoint(event);
     if (!point) return;
 
@@ -144,7 +147,7 @@ function PriceChartInner({
       tooltipLeft: point.x,
       tooltipTop: point.y,
     });
-  }, [prices, xScale, yScale, showTooltip]);
+  }, [prices, xScale, yScale, showTooltip, hoveredTrade]);
 
   const handleTradeHover = useCallback((trade: typeof processedTrades[0], index: number, event: React.MouseEvent) => {
     setHoveredTrade(index);
@@ -364,9 +367,14 @@ function PriceChartInner({
                   damping: 30,
                   delay: i * 0.02
                 }}
-                onMouseEnter={(e) => handleTradeHover(trade, i, e)}
-                onMouseLeave={() => {
+                onMouseEnter={(e) => {
+                  e.stopPropagation();
+                  handleTradeHover(trade, i, e);
+                }}
+                onMouseLeave={(e) => {
+                  e.stopPropagation();
                   setHoveredTrade(null);
+                  hideTooltip();
                 }}
                 style={{ cursor: 'pointer' }}
               />
