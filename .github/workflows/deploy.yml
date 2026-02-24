@@ -36,7 +36,17 @@ jobs:
           key: window-data-${{ github.run_id }}
           restore-keys: window-data-
 
+      - uses: actions/cache@v4
+        id: screenshot-cache
+        with:
+          path: public/images/*_pnl.png
+          key: screenshots-${{ hashFiles('scripts/traders.json') }}
+
       - run: npm ci
+
+      - name: Capture screenshots (if not cached)
+        if: steps.screenshot-cache.outputs.cache-hit != 'true'
+        run: node scripts/capture-screenshots.mjs
 
       - name: Fetch data (using cached prices, no VPS sync)
         run: node scripts/fetch-data.mjs

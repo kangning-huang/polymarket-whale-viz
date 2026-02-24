@@ -38,6 +38,11 @@ jobs:
           key: window-data-${{ github.run_id }}
           restore-keys: window-data-
 
+      - uses: actions/cache@v4
+        with:
+          path: public/images/*_pnl.png
+          key: screenshots-${{ hashFiles('scripts/traders.json') }}
+
       - name: Setup SSH for VPS
         if: env.VPS_HOST != ''
         env:

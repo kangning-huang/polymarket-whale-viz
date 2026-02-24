@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { TraderConfig, ManifestEntry } from '../types';
 
@@ -34,6 +35,8 @@ function PerformanceBar({ wins, losses }: { wins: number; losses: number }) {
 }
 
 export default function BotCard({ bot, windows, onClick, index }: Props) {
+  const [imgError, setImgError] = useState(false);
+
   // Compute stats from windows
   const botWindows = windows.filter(w => w.traders.some(t => t.name === bot.name));
   const totalPnl = botWindows.reduce((sum, w) => {
@@ -111,7 +114,7 @@ export default function BotCard({ bot, windows, onClick, index }: Props) {
         </div>
 
         {/* Screenshot */}
-        {bot.screenshot && (
+        {bot.screenshot && !imgError && (
           <div className="px-5">
             <div className="relative rounded-lg overflow-hidden border border-border-subtle group-hover:border-border transition-colors">
               <img
@@ -119,6 +122,7 @@ export default function BotCard({ bot, windows, onClick, index }: Props) {
                 alt={`${bot.name} P&L`}
                 loading="lazy"
                 className="w-full h-auto transition-transform duration-300 group-hover:scale-[1.02]"
+                onError={() => setImgError(true)}
               />
               {/* Overlay gradient */}
               <div className="absolute inset-0 bg-gradient-to-t from-surface/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
