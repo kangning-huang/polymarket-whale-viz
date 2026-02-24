@@ -26,6 +26,15 @@
       "profileUrl": "https://polymarket.com/@0x8dxd",
       "screenshot": "",
       "durations": [3600]
+    },
+    {
+      "address": "0x70ec235a31eb35f243e2618d6ea3b5b8962bbb5d",
+      "name": "vague-sourdough",
+      "color": "#10b981",
+      "description": "5-minute crypto prediction trader on Polymarket.",
+      "profileUrl": "https://polymarket.com/@vague-sourdough",
+      "screenshot": "",
+      "durations": [300]
     }
   ],
   "coins": ["btc", "eth", "sol", "xrp"],
