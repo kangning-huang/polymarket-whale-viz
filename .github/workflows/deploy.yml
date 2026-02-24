@@ -38,6 +38,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Fetch data (using cached prices, no VPS sync)
+        run: node scripts/fetch-data.mjs
+
       - run: npm run build
 
       - uses: actions/configure-pages@v4
