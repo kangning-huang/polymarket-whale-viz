@@ -497,7 +497,8 @@ async function main() {
         try {
           const cached = JSON.parse(readFileSync(cacheFile, 'utf-8'));
           const priceCount = cached.prices?.length ?? 0;
-          const minPricePoints = Math.floor(dur * 0.8);
+          const isApiPrices = priceCount < dur / 2;
+          const minPricePoints = isApiPrices ? Math.floor(dur / 60 * 0.5) : Math.floor(dur * 0.8);
 
           // Delete cache files with incomplete price data (they'll be re-fetched)
           if (priceCount < minPricePoints) {
@@ -579,15 +580,30 @@ async function main() {
         continue;
       }
 
-      // Only use VPS per-second prices - no fallback to interpolated/derived data
-      // Visitors need to see actual price movements to analyze bot strategies
-      const prices = loadVpsPrices(wts, coin, dur);
+      // Try VPS per-second prices first (best quality)
+      let prices = loadVpsPrices(wts, coin, dur);
+      if (prices) {
+        vpsPriceWindows++;
+      } else {
+        // Fallback: fetch from CLOB API (60s fidelity)
+        const upTokenId = marketInfo.clobTokenIds[0];
+        if (upTokenId) {
+          const history = await fetchPriceHistory(upTokenId, wts, wts + dur);
+          if (history && history.length >= 3) {
+            prices = history.map(pt => ({
+              t: pt.t,
+              sec: pt.t - wts,
+              p: Math.round(pt.p * 1000) / 1000,
+            }));
+            console.log(`  ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — using API prices (${prices.length} pts)`);
+          }
+        }
+      }
       if (!prices) {
-        console.log(`  Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — no VPS price data`);
+        console.log(`  Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — no price data`);
         windowsSkipped++;
         continue;
       }
-      vpsPriceWindows++;
 
       // Process trades for each trader (only traders who trade this duration)
       const tradersData = {};
@@ -612,10 +628,12 @@ async function main() {
         continue;
       }
 
-      // Filter out windows with incomplete price data (require 80% coverage)
-      const minPricePoints = Math.floor(dur * 0.8);
+      // Filter out windows with incomplete price data
+      // VPS data is per-second (~dur points), API data is per-minute (~dur/60 points)
+      const isApiPrices = prices.length < dur / 2;
+      const minPricePoints = isApiPrices ? Math.floor(dur / 60 * 0.5) : Math.floor(dur * 0.8);
       if (prices.length < minPricePoints) {
-        console.log(`  Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — incomplete prices (${prices.length}/${dur}, need ${minPricePoints})`);
+        console.log(`  Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — incomplete prices (${prices.length}, need ${minPricePoints})`);
         windowsSkipped++;
         continue;
       }
