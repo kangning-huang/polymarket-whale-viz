@@ -1,23 +1,18 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 
-declare global {
-  interface Window {
-    disqus_config: () => void;
-    DISQUS: { reset: (opts: { reload: boolean }) => void } | undefined;
-  }
-}
-
 export default function SuggestBot() {
   useEffect(() => {
-    window.disqus_config = function (this: any) {
+    const configFunction = function (this: any) {
       this.page.url = 'https://polybot-arena.com/';
       this.page.identifier = 'suggest-bots';
       this.page.title = 'Suggest a Bot - Polybot Arena';
     };
 
+    window.disqus_config = configFunction;
+
     if (window.DISQUS) {
-      window.DISQUS.reset({ reload: true });
+      window.DISQUS.reset({ reload: true, config: configFunction });
     } else {
       const script = document.createElement('script');
       script.src = 'https://polymarket-whale-viz.disqus.com/embed.js';

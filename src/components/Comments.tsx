@@ -8,20 +8,27 @@ interface Props {
 declare global {
   interface Window {
     disqus_config: () => void;
-    DISQUS: { reset: (opts: { reload: boolean }) => void } | undefined;
+    DISQUS: { reset: (opts: { reload: boolean; config?: () => void }) => void } | undefined;
   }
 }
 
 export default function Comments({ botName }: Props) {
   useEffect(() => {
-    window.disqus_config = function (this: any) {
-      this.page.url = `https://polybot-arena.com/#/bot/${botName}`;
+    const configFunction = function (this: any) {
+      this.page.url = `https://polybot-arena.com/bot/${botName}`;
       this.page.identifier = `bot-${botName}`;
-      this.page.title = `Bot: ${botName}`;
+      this.page.title = `${botName} Strategy Discussion`;
     };
 
+    // Set global config for initial load
+    window.disqus_config = configFunction;
+
     if (window.DISQUS) {
-      window.DISQUS.reset({ reload: true });
+      // Pass config directly to reset for proper thread switching
+      window.DISQUS.reset({
+        reload: true,
+        config: configFunction,
+      });
     } else {
       const script = document.createElement('script');
       script.src = 'https://polymarket-whale-viz.disqus.com/embed.js';
