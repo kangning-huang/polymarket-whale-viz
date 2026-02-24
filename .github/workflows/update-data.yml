@@ -1,0 +1,79 @@
+name: Update Data
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            public/data/windows
+            public/data/prices
+          key: window-data-${{ github.run_id }}
+          restore-keys: window-data-
+
+      - name: Setup SSH for VPS
+        if: env.VPS_HOST != ''
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$VPS_SSH_KEY" > ~/.ssh/vps_key
+          chmod 600 ~/.ssh/vps_key
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Download prices from VPS
+        if: env.VPS_HOST != ''
+        run: |
+          mkdir -p public/data/prices
+          rsync -avz --ignore-existing \
+            -e "ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no" \
+            ubuntu@${{ secrets.VPS_HOST }}:/opt/polymarket/data/raw/prices/ \
+            public/data/prices/ || echo "VPS sync failed, using API fallback"
+
+      - run: npm ci
+
+      - name: Capture bot profile screenshots
+        run: node scripts/capture-screenshots.mjs
+
+      - name: Fetch data
+        env:
+          VPS_SSH_KEY_PATH: ${{ env.VPS_HOST != '' && '~/.ssh/vps_key' || '' }}
+        run: node scripts/fetch-data.mjs
+
+      - run: npm run build
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

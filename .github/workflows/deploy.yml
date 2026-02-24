@@ -1,11 +1,9 @@
-name: Update & Deploy
+name: Deploy
 
 on:
-  schedule:
-    - cron: '0 */2 * * *'
-  workflow_dispatch: {}
   push:
     branches: [main]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -17,13 +15,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-deploy:
+  deploy:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    env:
-      VPS_HOST: ${{ secrets.VPS_HOST }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,34 +36,7 @@ jobs:
           key: window-data-${{ github.run_id }}
           restore-keys: window-data-
 
-      - name: Setup SSH for VPS
-        if: env.VPS_HOST != ''
-        env:
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$VPS_SSH_KEY" > ~/.ssh/vps_key
-          chmod 600 ~/.ssh/vps_key
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
-
-      - name: Download prices from VPS
-        if: env.VPS_HOST != ''
-        run: |
-          mkdir -p public/data/prices
-          rsync -avz --ignore-existing \
-            -e "ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no" \
-            ubuntu@${{ secrets.VPS_HOST }}:/opt/polymarket/data/raw/prices/ \
-            public/data/prices/ || echo "VPS sync failed, using API fallback"
-
       - run: npm ci
-
-      - name: Capture bot profile screenshots
-        run: node scripts/capture-screenshots.mjs
-
-      - name: Fetch data
-        env:
-          VPS_SSH_KEY_PATH: ${{ env.VPS_HOST != '' && '~/.ssh/vps_key' || '' }}
-        run: node scripts/fetch-data.mjs
 
       - run: npm run build
 

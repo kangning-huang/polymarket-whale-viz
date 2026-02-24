@@ -65,6 +65,37 @@ function Landing() {
       <div className="max-w-6xl mx-auto">
         <Header />
 
+        {/* Hero banner */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, duration: 0.6 }}
+          className="mb-8 rounded-2xl overflow-hidden border border-border relative hero-banner"
+        >
+          {/* Crop container — hides browser chrome from top of screenshot */}
+          <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16 / 4.2' }}>
+            <picture>
+              <source
+                srcSet="/images/banner short light.png"
+                media="(prefers-color-scheme: light)"
+              />
+              <img
+                src="/images/banner short.png"
+                alt="Polybot Arena — Trading bots competing in a neon-lit arena"
+                className="absolute w-full h-[130%] object-cover object-bottom select-none pointer-events-none"
+                draggable={false}
+              />
+            </picture>
+          </div>
+          {/* Bottom fade into page background */}
+          <div
+            className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"
+            style={{
+              background: 'linear-gradient(to top, var(--color-void), transparent)',
+            }}
+          />
+        </motion.div>
+
         {/* Bot grid */}
         <motion.div
           initial={{ opacity: 0 }}
