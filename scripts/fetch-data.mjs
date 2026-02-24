@@ -444,20 +444,6 @@ async function main() {
   mkdirSync(WINDOWS_DIR, { recursive: true });
   mkdirSync(PRICES_DIR, { recursive: true });
 
-  // One-time cache clear: delete ALL 5m files - they were using 15m market VPS prices (wrong market)
-  if (existsSync(WINDOWS_DIR)) {
-    const staleFiles = readdirSync(WINDOWS_DIR).filter(f => f.endsWith('_5m.json'));
-    if (staleFiles.length > 0) {
-      console.log(`\nClearing ${staleFiles.length} stale 5m cache files (had wrong 15m market prices)...`);
-      for (const f of staleFiles) {
-        try {
-          unlinkSync(join(WINDOWS_DIR, f));
-          console.log(`  Removed ${f}`);
-        } catch { /* ignore */ }
-      }
-    }
-  }
-
   // Step 0: Download VPS price files
   downloadPriceFiles();
 
