@@ -1,8 +1,8 @@
-# Polymarket Whale Watch
+# Polybo Arena
 
-**Live site: https://kangning-huang.github.io/polymarket-whale-viz/**
+**Live site: https://polybot-arena.com** (coming soon)
 
-Watch how top bots trade crypto prediction markets on [Polymarket](https://polymarket.com).
+Watch elite trading bots compete in [Polymarket](https://polymarket.com) crypto prediction markets. Study their strategies, entries, exits, and P&L in real-time.
 
 ## How it works
 

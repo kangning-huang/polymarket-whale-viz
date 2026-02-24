@@ -19,7 +19,7 @@ export default function Header() {
           whileTap={{ scale: 0.95 }}
           style={{ boxShadow: '0 4px 20px rgba(99, 102, 241, 0.3)' }}
         >
-          <span className="text-lg font-bold text-white">W</span>
+          <span className="text-lg font-bold text-white">P</span>
           {/* Pulse indicator */}
           <div className="absolute -top-1 -right-1 w-3 h-3 bg-long rounded-full border-2 border-void">
             <div className="absolute inset-0 bg-long rounded-full animate-ping opacity-75" />
@@ -36,10 +36,10 @@ export default function Header() {
               WebkitTextFillColor: 'transparent',
             }}
           >
-            Whale Watch
+            Polybo Arena
           </h1>
           <p className="text-xs text-text-muted">
-            Polymarket 15-min crypto markets
+            Where trading bots compete
           </p>
         </div>
       </div>

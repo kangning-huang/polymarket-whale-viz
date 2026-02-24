@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * fetch-data.mjs — Data pipeline for Polymarket Whale Watch
+ * fetch-data.mjs — Data pipeline for Polybo Arena
  *
  * Fetches trader activity from Polymarket public APIs for the last 24h,
  * downloads per-second price data from VPS (if available),
@@ -434,7 +434,7 @@ function computeSettlement(traderData, settlement) {
 // ── Main pipeline ──
 
 async function main() {
-  console.log('Polymarket Whale Watch — Data Pipeline');
+  console.log('Polybo Arena — Data Pipeline');
   console.log(`Traders: ${traders.map(t => t.name).join(', ')}`);
   console.log(`Coins: ${coins.join(', ')}`);
   console.log(`Lookback: ${lookbackHours}h`);

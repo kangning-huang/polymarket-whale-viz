@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with the polymarket-whale-viz codebase.
+This file provides guidance to Claude Code when working with the Polybo Arena codebase.
 
 ## What This Is
 
-A React visualization dashboard for tracking whale traders on Polymarket's crypto prediction markets. Shows real-time trade activity, position management, and P&L for top traders across multiple market durations.
+**Polybo Arena** — A React visualization dashboard where trading bots compete in Polymarket's crypto prediction markets. Shows real-time trade activity, position management, and P&L for top bots across multiple market durations.
 
 ## Architecture
 
@@ -39,9 +39,11 @@ Traders are configured in `scripts/traders.json`. Each trader has a `durations` 
 | 900 | 15m | 15-minute "Up or Down" markets |
 | 3600 | 1h | 1-hour markets (planned) |
 
-**Current traders:**
-- `distinct-baguette` — 15-minute markets only (`durations: [900]`)
-- `abrak25` — 5-minute markets only (`durations: [300]`)
+**Current bots:**
+- `distinct-baguette` — 15-minute markets (`durations: [900]`)
+- `abrak25` — 5-minute markets (`durations: [300]`)
+- `vague-sourdough` — 5-minute markets (`durations: [300]`)
+- `0x8dxd` — 1-hour markets (`durations: [3600]`)
 
 The data pipeline (`fetch-data.mjs`) filters windows by each trader's configured durations. A trader will only appear in windows matching their intervals.
 

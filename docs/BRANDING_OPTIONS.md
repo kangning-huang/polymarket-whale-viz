@@ -28,7 +28,7 @@ Below are 10 naming options with pros/cons analysis.
 
 ---
 
-## 2. **whalewars.io**
+## 2. **whale-wars.io**
 
 **Pros:**
 - "Whale" is crypto-native terminology (big players)
@@ -44,7 +44,7 @@ Below are 10 naming options with pros/cons analysis.
 
 ---
 
-## 3. **botglass.xyz**
+## 3. **bot-glass.xyz**
 
 **Pros:**
 - "Glass" = transparency, seeing through, looking inside
@@ -60,7 +60,7 @@ Below are 10 naming options with pros/cons analysis.
 
 ---
 
-## 4. **predictorpvp.com**
+## 4. **predictor-pvp.com**
 
 **Pros:**
 - "PvP" (player vs player) is gaming terminology everyone knows
@@ -76,7 +76,7 @@ Below are 10 naming options with pros/cons analysis.
 
 ---
 
-## 5. **marketsharks.live**
+## 5. **market-sharks.live**
 
 **Pros:**
 - "Sharks" = smart, aggressive, profitable traders
@@ -92,7 +92,7 @@ Below are 10 naming options with pros/cons analysis.
 
 ---
 
-## 6. **thebotpit.com**
+## 6. **the-bot-pit.com**
 
 **Pros:**
 - "Pit" = trading pit, fight pit, where action happens
@@ -108,7 +108,7 @@ Below are 10 naming options with pros/cons analysis.
 
 ---
 
-## 7. **polysnipe.io**
+## 7. **poly-snipe.io**
 
 **Pros:**
 - "Snipe" = precision, timing, skill (sniping trades)
@@ -124,7 +124,7 @@ Below are 10 naming options with pros/cons analysis.
 
 ---
 
-## 8. **tradecraft.watch**
+## 8. **trade-craft.watch**
 
 **Pros:**
 - "Tradecraft" = secret techniques, spy terminology, insider knowledge
@@ -140,7 +140,7 @@ Below are 10 naming options with pros/cons analysis.
 
 ---
 
-## 9. **botleaderboard.com**
+## 9. **bot-leaderboard.com**
 
 **Pros:**
 - Extremely clear: this is a leaderboard of bots
@@ -156,7 +156,7 @@ Below are 10 naming options with pros/cons analysis.
 
 ---
 
-## 10. **alphaduel.com**
+## 10. **alpha-duel.com**
 
 **Pros:**
 - "Alpha" = edge, excess returns, what traders seek
