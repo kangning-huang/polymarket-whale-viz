@@ -113,7 +113,7 @@ function Landing() {
       <div
         ref={heroRef}
         className="relative w-full overflow-hidden"
-        style={{ height: 'clamp(280px, 50vw, 520px)' }}
+        style={{ height: 'clamp(200px, 32vw, 380px)' }}
       >
         {/* Parallax banner image */}
         <motion.div
