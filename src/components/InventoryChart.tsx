@@ -25,6 +25,20 @@ function InventoryChartInner({
   const innerWidth = width - margin.left - margin.right;
   const innerHeight = height - margin.top - margin.bottom;
 
+  // Extend inventory to end of window if trading stopped early
+  const extendedInventory = useMemo(() => {
+    if (inventory.length === 0) return inventory;
+    const last = inventory[inventory.length - 1];
+    // If last point is before window end, extend with a flat line to the end
+    if (last.sec < duration) {
+      return [
+        ...inventory,
+        { ...last, sec: duration }
+      ];
+    }
+    return inventory;
+  }, [inventory, duration]);
+
   // Find max tokens for scale
   const maxTokens = useMemo(() => {
     return Math.max(
@@ -81,7 +95,7 @@ function InventoryChartInner({
           transition={{ duration: 0.5 }}
         >
           <AreaClosed
-            data={inventory}
+            data={extendedInventory}
             x={d => xScale(d.sec)}
             y={d => yScale(d.upTokens)}
             yScale={yScale}
@@ -89,7 +103,7 @@ function InventoryChartInner({
             curve={curveStepAfter}
           />
           <LinePath
-            data={inventory}
+            data={extendedInventory}
             x={d => xScale(d.sec)}
             y={d => yScale(d.upTokens)}
             stroke="#22c55e"
@@ -106,7 +120,7 @@ function InventoryChartInner({
           transition={{ duration: 0.5, delay: 0.1 }}
         >
           <AreaClosed
-            data={inventory}
+            data={extendedInventory}
             x={d => xScale(d.sec)}
             y={d => yScale(d.downTokens)}
             yScale={yScale}
@@ -114,7 +128,7 @@ function InventoryChartInner({
             curve={curveStepAfter}
           />
           <LinePath
-            data={inventory}
+            data={extendedInventory}
             x={d => xScale(d.sec)}
             y={d => yScale(d.downTokens)}
             stroke="#ef4444"
@@ -124,14 +138,14 @@ function InventoryChartInner({
           />
         </motion.g>
 
-        {/* Final position markers */}
+        {/* Final position markers (at window end) */}
         {inventory.length > 0 && (
           <>
             <motion.circle
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.3, type: "spring" }}
-              cx={xScale(inventory[inventory.length - 1].sec)}
+              cx={xScale(duration)}
               cy={yScale(inventory[inventory.length - 1].upTokens)}
               r={5}
               fill="#22c55e"
@@ -141,7 +155,7 @@ function InventoryChartInner({
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.4, type: "spring" }}
-              cx={xScale(inventory[inventory.length - 1].sec)}
+              cx={xScale(duration)}
               cy={yScale(inventory[inventory.length - 1].downTokens)}
               r={5}
               fill="#ef4444"
