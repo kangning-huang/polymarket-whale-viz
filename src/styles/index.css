@@ -88,11 +88,13 @@
 @layer components {
   /* Glass effect cards */
   .glass-card {
-    @apply bg-surface/80 backdrop-blur-sm border border-border rounded-xl;
+    @apply backdrop-blur-sm border border-border rounded-xl;
+    background-color: color-mix(in srgb, var(--color-surface) 80%, transparent);
   }
 
   .glass-card-elevated {
-    @apply bg-elevated/90 backdrop-blur-sm border border-border rounded-xl shadow-card;
+    @apply backdrop-blur-sm border border-border rounded-xl shadow-card;
+    background-color: color-mix(in srgb, var(--color-elevated) 90%, transparent);
   }
 
   /* Stat value with glow effect */
@@ -211,9 +213,10 @@
   /* Tooltip */
   .chart-tooltip {
     @apply absolute pointer-events-none z-50;
-    @apply bg-elevated/95 backdrop-blur-sm border border-border rounded-lg shadow-xl;
+    @apply backdrop-blur-sm border border-border rounded-lg shadow-xl;
     @apply px-3 py-2 text-sm;
     @apply animate-scale-in;
+    background-color: color-mix(in srgb, var(--color-elevated) 95%, transparent);
   }
 
   /* Grid overlay for charts */
@@ -243,7 +246,10 @@
   .stats-card {
     @apply bg-surface border border-border-subtle rounded-lg p-4;
     @apply transition-all duration-200;
-    @apply hover:border-border hover:bg-elevated/50;
+    @apply hover:border-border;
+  }
+  .stats-card:hover {
+    background-color: color-mix(in srgb, var(--color-elevated) 50%, transparent);
   }
 
   /* Win/Loss ring */
