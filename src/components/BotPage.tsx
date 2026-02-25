@@ -15,17 +15,14 @@ interface Props {
 }
 
 export default function BotPage({ bot, manifest }: Props) {
-  const MIN_PRICE_POINTS = 100;
   const DURATION_LABELS: Record<number, string> = { 900: '15m', 300: '5m' };
 
-  // Derive unique window slots (ts + duration) containing this bot with dense data
+  // Derive unique window slots (ts + duration) containing this bot
+  // Backend already filters for adequate price data coverage
   const windowSlots = useMemo(() => {
     const seen = new Set<string>();
     return manifest.windows
-      .filter(w =>
-        w.traders.some(t => t.name === bot.name) &&
-        (w.priceCount == null || w.priceCount >= MIN_PRICE_POINTS)
-      )
+      .filter(w => w.traders.some(t => t.name === bot.name))
       .reduce<{ ts: number; duration: number; coin: string; pnl: number }[]>((acc, w) => {
         const dur = w.duration ?? 900;
         const key = `${w.windowTs}_${dur}_${w.coin}`;
@@ -52,15 +49,14 @@ export default function BotPage({ bot, manifest }: Props) {
   const selectedWindow = selectedSlot ? Number(selectedSlot.split('_')[0]) : null;
   const selectedDuration = selectedSlot ? Number(selectedSlot.split('_')[1]) : 900;
 
-  // Coins available for selected window+duration (only those with dense data)
+  // Coins available for selected window+duration
   const availableCoins = useMemo(() => {
     if (!selectedWindow) return [];
     return manifest.windows
       .filter(w =>
         w.windowTs === selectedWindow &&
         (w.duration ?? 900) === selectedDuration &&
-        w.traders.some(t => t.name === bot.name) &&
-        (w.priceCount == null || w.priceCount >= MIN_PRICE_POINTS)
+        w.traders.some(t => t.name === bot.name)
       )
       .map(w => w.coin);
   }, [manifest.windows, selectedWindow, selectedDuration, bot.name]);
