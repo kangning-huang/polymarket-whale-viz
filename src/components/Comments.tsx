@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 
 interface Props {
@@ -12,39 +12,47 @@ declare global {
   }
 }
 
+/**
+ * Remove all Disqus state so the next embed.js load starts fresh.
+ * DISQUS.reset() is unreliable in hash-based SPAs — a full teardown
+ * is the only way to guarantee the correct thread loads.
+ */
+function teardownDisqus() {
+  // Remove Disqus embed scripts
+  document.querySelectorAll<HTMLScriptElement>('script[src*="disqus.com"]').forEach(el => el.remove());
+  // Remove iframes Disqus injects outside #disqus_thread
+  document.querySelectorAll<HTMLIFrameElement>('iframe[src*="disqus.com"]').forEach(el => el.remove());
+  // Remove any Disqus-generated elements (sidebar, overlay, etc.)
+  document.querySelectorAll('[id^="dsq-"]').forEach(el => el.remove());
+  // Clear the global so we take the fresh-load path next time
+  delete (window as any).DISQUS;
+}
+
 export default function Comments({ botName }: Props) {
+  const threadRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    const configFunction = function (this: any) {
+    // Full teardown of any previous Disqus instance (from SuggestBot or another bot)
+    teardownDisqus();
+    if (threadRef.current) threadRef.current.innerHTML = '';
+
+    // Configure for this bot's thread
+    window.disqus_config = function (this: any) {
       this.page.url = `https://polybot-arena.com/bot/${botName}`;
       this.page.identifier = `bot-${botName}`;
       this.page.title = `${botName} Strategy Discussion`;
     };
 
-    // Set global config for initial load
-    window.disqus_config = configFunction;
-
-    if (window.DISQUS) {
-      // Reset existing Disqus instance to load the new bot's thread.
-      // Important: do NOT destroy/recreate the container div — Disqus needs
-      // its internal iframe references to remain valid for reset to work.
-      window.DISQUS.reset({
-        reload: true,
-        config: configFunction,
-      });
-    } else {
-      const script = document.createElement('script');
-      script.src = 'https://polymarket-whale-viz.disqus.com/embed.js';
-      script.setAttribute('data-timestamp', String(+new Date()));
-      script.async = true;
-      document.body.appendChild(script);
-    }
+    // Load Disqus embed from scratch
+    const script = document.createElement('script');
+    script.src = 'https://polymarket-whale-viz.disqus.com/embed.js';
+    script.setAttribute('data-timestamp', String(+new Date()));
+    script.async = true;
+    document.body.appendChild(script);
 
     return () => {
-      // Clear thread content on unmount so a stale thread is never visible
-      const thread = document.getElementById('disqus_thread');
-      if (thread) {
-        thread.innerHTML = '';
-      }
+      teardownDisqus();
+      if (threadRef.current) threadRef.current.innerHTML = '';
     };
   }, [botName]);
 
@@ -62,7 +70,7 @@ export default function Comments({ botName }: Props) {
       <p className="text-sm text-text-muted mb-4">
         What strategy is this bot using? Share your analysis and debate with others below.
       </p>
-      <div id="disqus_thread" className="min-h-[200px]" />
+      <div ref={threadRef} id="disqus_thread" className="min-h-[200px]" />
     </motion.div>
   );
 }
