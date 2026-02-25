@@ -484,12 +484,13 @@ async function main() {
         try {
           const cached = JSON.parse(readFileSync(cacheFile, 'utf-8'));
           const priceCount = cached.prices?.length ?? 0;
-          const isApiPrices = priceCount < dur / 2;
-          const minPricePoints = isApiPrices ? Math.floor(dur / 60 * 0.5) : Math.floor(dur * 0.8);
+          const maxSec = cached.prices?.length > 0 ? Math.max(...cached.prices.map(p => p.sec)) : 0;
+          const timeCoverage = maxSec / dur;
+          const minTimeCoverage = 0.8;
 
-          // Delete cache files with incomplete price data (they'll be re-fetched)
-          if (priceCount < minPricePoints) {
-            console.log(`  Removing incomplete cache ${cacheFile.split('/').pop()} (${priceCount}/${dur} prices)`);
+          // Delete cache files with incomplete time coverage (they'll be re-fetched)
+          if (timeCoverage < minTimeCoverage) {
+            console.log(`  Removing incomplete cache ${cacheFile.split('/').pop()} (${maxSec}s/${dur}s = ${Math.round(timeCoverage * 100)}% coverage)`);
             try { unlinkSync(cacheFile); } catch { /* ignore */ }
             // Continue to re-fetch this window
           } else {
@@ -616,11 +617,13 @@ async function main() {
       }
 
       // Filter out windows with incomplete price data
-      // VPS data is per-second (~dur points), API data is per-minute (~dur/60 points)
-      const isApiPrices = prices.length < dur / 2;
-      const minPricePoints = isApiPrices ? Math.floor(dur / 60 * 0.5) : Math.floor(dur * 0.8);
-      if (prices.length < minPricePoints) {
-        console.log(`  Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — incomplete prices (${prices.length}, need ${minPricePoints})`);
+      // Check both point count AND time coverage (max sec value should cover most of window)
+      const maxSec = Math.max(...prices.map(p => p.sec));
+      const timeCoverage = maxSec / dur;
+      const minTimeCoverage = 0.8; // Require prices to cover at least 80% of window duration
+
+      if (timeCoverage < minTimeCoverage) {
+        console.log(`  Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — incomplete time coverage (${maxSec}s/${dur}s = ${Math.round(timeCoverage * 100)}%, need ${minTimeCoverage * 100}%)`);
         windowsSkipped++;
         continue;
       }
