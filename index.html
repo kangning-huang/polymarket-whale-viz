@@ -10,6 +10,19 @@
   <body>
     <div id="root"></div>
     <script>
+      // GitHub Pages SPA redirect: decode path from 404.html redirect
+      (function(l) {
+        if (l.search[1] === '/') {
+          var decoded = l.search.slice(1).split('&').map(function(s) {
+            return s.replace(/~and~/g, '&');
+          }).join('?');
+          window.history.replaceState(null, null,
+            l.pathname.slice(0, -1) + decoded + l.hash
+          );
+        }
+      }(window.location));
+    </script>
+    <script>
       window.onerror = function(msg, src, line, col, err) {
         document.getElementById('root').innerHTML =
           '<pre style="color:#f85149;padding:20px;font-size:13px">JS Error: ' +
