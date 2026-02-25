@@ -23,8 +23,13 @@ export default function Comments({ botName }: Props) {
     // Set global config for initial load
     window.disqus_config = configFunction;
 
+    // Clear existing thread content so Disqus loads the correct thread
+    const thread = document.getElementById('disqus_thread');
+    if (thread) {
+      thread.innerHTML = '';
+    }
+
     if (window.DISQUS) {
-      // Pass config directly to reset for proper thread switching
       window.DISQUS.reset({
         reload: true,
         config: configFunction,

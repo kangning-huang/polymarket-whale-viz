@@ -437,8 +437,8 @@ export default function BotPage({ bot, manifest }: Props) {
         )}
       </AnimatePresence>
 
-      {/* Comments */}
-      <Comments botName={bot.name} />
+      {/* Comments — key forces full remount so Disqus loads the correct thread */}
+      <Comments key={bot.name} botName={bot.name} />
     </motion.div>
   );
 }
