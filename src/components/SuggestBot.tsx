@@ -1,25 +1,39 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 
+/**
+ * Remove all Disqus state so the next embed.js load starts fresh.
+ */
+function teardownDisqus() {
+  document.querySelectorAll<HTMLScriptElement>('script[src*="disqus.com"]').forEach(el => el.remove());
+  document.querySelectorAll<HTMLIFrameElement>('iframe[src*="disqus.com"]').forEach(el => el.remove());
+  document.querySelectorAll('[id^="dsq-"]').forEach(el => el.remove());
+  delete (window as any).DISQUS;
+}
+
 export default function SuggestBot() {
+  const threadRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    const configFunction = function (this: any) {
+    teardownDisqus();
+    if (threadRef.current) threadRef.current.innerHTML = '';
+
+    window.disqus_config = function (this: any) {
       this.page.url = 'https://polybot-arena.com/';
       this.page.identifier = 'suggest-bots';
       this.page.title = 'Suggest a Bot - Polybot Arena';
     };
 
-    window.disqus_config = configFunction;
+    const script = document.createElement('script');
+    script.src = 'https://polymarket-whale-viz.disqus.com/embed.js';
+    script.setAttribute('data-timestamp', String(+new Date()));
+    script.async = true;
+    document.body.appendChild(script);
 
-    if (window.DISQUS) {
-      window.DISQUS.reset({ reload: true, config: configFunction });
-    } else {
-      const script = document.createElement('script');
-      script.src = 'https://polymarket-whale-viz.disqus.com/embed.js';
-      script.setAttribute('data-timestamp', String(+new Date()));
-      script.async = true;
-      document.body.appendChild(script);
-    }
+    return () => {
+      teardownDisqus();
+      if (threadRef.current) threadRef.current.innerHTML = '';
+    };
   }, []);
 
   return (
@@ -37,7 +51,7 @@ export default function SuggestBot() {
         Know a profitable Polymarket trading bot we should track? Drop their profile link below
         and we'll consider adding them to the arena.
       </p>
-      <div id="disqus_thread" className="min-h-[200px]" />
+      <div ref={threadRef} id="disqus_thread" className="min-h-[200px]" />
     </motion.div>
   );
 }
