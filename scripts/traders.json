@@ -35,6 +35,15 @@
       "profileUrl": "https://polymarket.com/@vague-sourdough",
       "screenshot": "vague-sourdough_pnl.png",
       "durations": [300]
+    },
+    {
+      "address": "0x2d8b401d2f0e6937afebf18e19e11ca568a5260a",
+      "name": "vidarx",
+      "color": "#ef4444",
+      "description": "5-minute crypto prediction trader on Polymarket.",
+      "profileUrl": "https://polymarket.com/@vidarx",
+      "screenshot": "vidarx_pnl.png",
+      "durations": [300]
     }
   ],
   "coins": ["btc", "eth", "sol", "xrp"],
