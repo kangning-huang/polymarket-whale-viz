@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import { motion, useScroll, useTransform, useInView } from 'framer-motion';
 import { fetchManifest } from './api';
@@ -8,6 +8,10 @@ import Header from './components/Header';
 import BotCard from './components/BotCard';
 import BotPage from './components/BotPage';
 import SuggestBot from './components/SuggestBot';
+import SEOHead from './components/SEOHead';
+
+const BotLeaderboard = lazy(() => import('./components/BotLeaderboard'));
+const BlogPost = lazy(() => import('./components/BlogPost'));
 
 /* ── Scroll-reveal wrapper ─────────────────────────────────── */
 function Reveal({
@@ -111,6 +115,9 @@ function Landing() {
 
   return (
     <div className="min-h-screen">
+      <SEOHead
+        description="Watch elite Polymarket trading bots compete in real-time. Compare bot strategies, P&L, entries and exits across crypto prediction market windows. The only bot performance dashboard with trade-level visualizations."
+      />
       {/* ━━━━━━━━━━━━━━━ HERO — full-impact parallax banner ━━━━━━━━━━━━━━━ */}
       <div
         ref={heroRef}
@@ -181,6 +188,22 @@ function Landing() {
               {' '}in real-time. See their entries, exits, and profit/loss on every market window.{' '}
               <span className="text-text-muted">Updates every 2 hours.</span>
             </p>
+          </Reveal>
+
+          {/* ── Navigation links ── */}
+          <Reveal className="mb-10 flex flex-wrap gap-3" y={30}>
+            <button
+              onClick={() => navigate('/leaderboard')}
+              className="btn-ghost text-sm flex items-center gap-2"
+            >
+              <span>🏆</span> Bot Leaderboard
+            </button>
+            <button
+              onClick={() => navigate('/blog/how-polymarket-bots-trade')}
+              className="btn-ghost text-sm flex items-center gap-2"
+            >
+              <span>📊</span> How Bots Trade
+            </button>
           </Reveal>
 
           {/* ── Section label ── */}
@@ -301,8 +324,18 @@ function BotPageRoute() {
     );
   }
 
+  const durationLabel = bot.durations?.map(d =>
+    d === 300 ? '5-minute' : d === 900 ? '15-minute' : d === 3600 ? '1-hour' : `${d}s`
+  ).join(', ') || 'crypto';
+
   return (
     <div className="min-h-screen p-6">
+      <SEOHead
+        title={`${bot.name} — Polymarket Trading Bot Performance`}
+        description={`Live trade data and P&L for ${bot.name}, a ${durationLabel} crypto prediction market bot on Polymarket. See entries, exits, strategy patterns, and profit/loss on every market window.`}
+        path={`/bot/${bot.name}`}
+        type="profile"
+      />
       <div className="max-w-6xl mx-auto">
         <Header />
         <motion.button
@@ -337,11 +370,27 @@ function LegacyBotWindowRedirect() {
   return null;
 }
 
+function SuspenseWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  );
+}
+
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/bot/:name" element={<BotPageRoute />} />
+      <Route path="/leaderboard" element={<SuspenseWrapper><BotLeaderboard /></SuspenseWrapper>} />
+      <Route path="/blog/how-polymarket-bots-trade" element={<SuspenseWrapper><BlogPost /></SuspenseWrapper>} />
       <Route path="/bot/:name/:ts/:coin" element={<LegacyBotWindowRedirect />} />
       <Route path="/window/:ts/:coin" element={<LegacyRedirect />} />
     </Routes>
