@@ -39,7 +39,7 @@ export default function Comments({ botName }: Props) {
     // Configure for this bot's thread
     window.disqus_config = function (this: any) {
       this.page.url = `https://polybot-arena.com/bot/${botName}`;
-      this.page.identifier = `bot-${botName}`;
+      this.page.identifier = `polybot-v2-${botName}`;
       this.page.title = `${botName} Strategy Discussion`;
     };
 
