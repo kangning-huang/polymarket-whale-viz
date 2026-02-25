@@ -30,9 +30,7 @@ jobs:
 
       - uses: actions/cache@v4
         with:
-          path: |
-            public/data/windows
-            public/data/prices
+          path: public/data/windows
           key: window-data-${{ github.run_id }}
           restore-keys: window-data-
 
@@ -58,7 +56,7 @@ jobs:
             echo "$VPS_SSH_KEY" > ~/.ssh/vps_key
             chmod 600 ~/.ssh/vps_key
             mkdir -p public/data/prices
-            rsync -avz --ignore-existing \
+            rsync -avz \
               -e "ssh -i ~/.ssh/vps_key -o StrictHostKeyChecking=no" \
               root@${VPS_HOST}:/opt/polymarket/data/raw/prices/ \
               public/data/prices/
