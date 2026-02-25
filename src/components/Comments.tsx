@@ -23,13 +23,10 @@ export default function Comments({ botName }: Props) {
     // Set global config for initial load
     window.disqus_config = configFunction;
 
-    // Clear existing thread content so Disqus loads the correct thread
-    const thread = document.getElementById('disqus_thread');
-    if (thread) {
-      thread.innerHTML = '';
-    }
-
     if (window.DISQUS) {
+      // Reset existing Disqus instance to load the new bot's thread.
+      // Important: do NOT destroy/recreate the container div — Disqus needs
+      // its internal iframe references to remain valid for reset to work.
       window.DISQUS.reset({
         reload: true,
         config: configFunction,
@@ -41,6 +38,14 @@ export default function Comments({ botName }: Props) {
       script.async = true;
       document.body.appendChild(script);
     }
+
+    return () => {
+      // Clear thread content on unmount so a stale thread is never visible
+      const thread = document.getElementById('disqus_thread');
+      if (thread) {
+        thread.innerHTML = '';
+      }
+    };
   }, [botName]);
 
   return (
