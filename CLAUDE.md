@@ -1,89 +1,78 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with the Polybot Arena codebase.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What This Is
 
-**Polybot Arena** — A React visualization dashboard where trading bots compete in Polymarket's crypto prediction markets. Shows real-time trade activity, position management, and P&L for top bots across multiple market durations.
+**Polybot Arena** — A React visualization dashboard where trading bots compete in Polymarket's crypto prediction markets. Shows real-time trade activity, position management, and P&L for top bots across multiple market durations. Live at https://polybot-arena.com.
+
+## Commands
+
+```bash
+npm run dev          # Start Vite dev server (http://localhost:5173)
+npm run build        # TypeScript check + Vite build to dist/
+npm run preview      # Preview production build locally
+npm run fetch-data   # Run data pipeline (fetches trades, computes stats, writes JSON)
+npm run capture-screenshots  # Generate trader P&L screenshots via Puppeteer
+```
+
+No test suite exists. `npm run build` runs `tsc` for type checking.
 
 ## Architecture
 
 ```
-Frontend (React + Vite)
-├── src/components/     # UI components (PriceChart, BotPage, StatsCards, etc.)
-├── src/styles/         # Tailwind CSS
-├── public/data/        # Generated JSON files (manifest.json + windows/*.json)
-└── scripts/            # Data pipeline scripts
+Frontend (React 18 + TypeScript + Vite)
+├── src/main.tsx           # Entry point, BrowserRouter wraps App
+├── src/App.tsx            # Routes: / (Landing), /bot/:name (BotPage)
+├── src/components/        # UI components
+├── src/api.ts             # Data fetching (manifest.json + window detail JSON)
+├── src/types.ts           # TypeScript types for trades, prices, windows, etc.
+├── src/theme.ts           # Dark/light mode detection (OS preference)
+├── src/styles/index.css   # Tailwind + CSS variables for theming
+└── public/data/           # Generated JSON (gitignored, built by pipeline)
 
-Data Pipeline (GitHub Actions, runs every 2 hours)
-├── rsync from VPS      # Per-second price data
-├── fetch-data.mjs      # Fetches trades from Polymarket APIs
-└── writes to dist/     # Built site deployed to GitHub Pages
+Data Pipeline (scripts/)
+├── fetch-data.mjs         # Main pipeline: fetches trades from Polymarket APIs,
+│                          #   computes FIFO inventory, P&L, writes JSON
+├── traders.json           # Trader config (addresses, colors, durations)
+└── capture-screenshots.mjs # Puppeteer screenshot capture of trader profiles
+
+Deployment (GitHub Actions → GitHub Pages)
+├── .github/workflows/deploy.yml  # Build + deploy on push to main
+├── public/404.html               # SPA redirect for GitHub Pages
+├── index.html                    # SPA redirect decoder + entry point
+└── public/CNAME                  # polybot-arena.com
 ```
 
-## Tech Stack
+## Data Flow
 
-- **React 18** + TypeScript + Vite
-- **Visx** (D3 primitives for React) — charts and visualizations
-- **Framer Motion** — animations
-- **Tailwind CSS** — styling
-- **GitHub Actions** — CI/CD + periodic data refresh
+1. **Pipeline** (`fetch-data.mjs`): Calls Polymarket Data API, Gamma API, and CLOB API. Groups trades into market windows (5m/15m/1h). Outputs `public/data/manifest.json` (index of all windows) and `public/data/windows/{ts}_{coin}_{duration}.json` (detailed per-window data with trades, prices, inventory, settlement).
+
+2. **Frontend**: `fetchManifest()` loads the window index. `BotPage` lets user select a window, then `fetchWindowDetail()` loads the detailed JSON. `PriceChart` (Visx/D3) renders price lines with trade overlays, bid/ask bands, and optional rolling averages.
+
+## Key Patterns
+
+**Routing**: Uses `BrowserRouter` (not HashRouter). GitHub Pages SPA routing works via `public/404.html` redirecting to `index.html` with path encoded in query string. Legacy hash routes (`/#/bot/...`) are not redirected.
+
+**Disqus Comments**: Each bot page has a separate Disqus thread. Identifiers use format `polybot-v2-{botName}` — the `v2` prefix exists because older `bot-{name}` identifiers got merged into one thread during a previous HashRouter era. The `Comments` component does a full teardown (removing all Disqus scripts/iframes/globals) on unmount to ensure clean thread loading in SPA navigation.
+
+**Theme**: Dark/light mode follows OS `prefers-color-scheme`. CSS variables in `:root` define all colors. Tailwind references these variables. Banner image swaps between dark/light variants.
+
+**Charts**: Built with Visx (D3 primitives for React). `PriceChart.tsx` is the most complex component — handles price lines, trade markers, bid/ask bands, rolling averages, tooltips, and settlement indicators.
 
 ## Trader Configuration
 
-Traders are configured in `scripts/traders.json`. Each trader has a `durations` array specifying which market intervals they trade:
-
-| Duration (sec) | Label | Description |
-|----------------|-------|-------------|
-| 300 | 5m | 5-minute "Up or Down" markets |
-| 900 | 15m | 15-minute "Up or Down" markets |
-| 3600 | 1h | 1-hour markets (planned) |
-
-**Current bots:**
-- `distinct-baguette` — 15-minute markets (`durations: [900]`)
-- `abrak25` — 5-minute markets (`durations: [300]`)
-- `vague-sourdough` — 5-minute markets (`durations: [300]`)
-- `0x8dxd` — 1-hour markets (`durations: [3600]`)
-
-The data pipeline (`fetch-data.mjs`) filters windows by each trader's configured durations. A trader will only appear in windows matching their intervals.
-
-## Key Files
-
-- `scripts/traders.json` — Trader addresses, colors, descriptions, and duration preferences
-- `scripts/fetch-data.mjs` — Data pipeline (fetches trades, computes stats, writes JSON)
-- `.github/workflows/deploy.yml` — GitHub Actions workflow (VPS sync + deploy)
-- `src/components/BotPage.tsx` — Main bot detail view with charts
-- `src/components/PriceChart.tsx` — Visx-based price visualization with trade overlays
-
-## Running Locally
-
-```bash
-npm install
-npm run fetch-data  # Requires VPS env vars for price data
-npm run dev
-```
+Traders are configured in `scripts/traders.json`. Each has a `durations` array specifying which market intervals they trade (300=5m, 900=15m, 3600=1h). The data pipeline filters windows by each trader's configured durations.
 
 ## Adding a New Trader
 
-1. Find their Polymarket wallet address
-2. Add entry to `scripts/traders.json`:
-   ```json
-   {
-     "address": "0x...",
-     "name": "trader-name",
-     "color": "#hex",
-     "description": "Short description",
-     "profileUrl": "https://polymarket.com/@trader-name",
-     "screenshot": "trader_pnl.png",
-     "durations": [900]  // Which market intervals they trade
-   }
-   ```
-3. Run `npm run fetch-data` to verify
-4. Commit and push — GitHub Actions will deploy
+1. Add entry to `scripts/traders.json` with address, name, color, description, profileUrl, screenshot filename, and durations array
+2. Run `npm run fetch-data` to verify
+3. Commit and push — GitHub Actions will deploy
 
-## Adding a New Market Duration
+## Polymarket APIs Used
 
-1. Update `windowDurations` array in `scripts/traders.json`
-2. Add label mapping in `DURATION_LABELS` in `fetch-data.mjs`
-3. Update VPS recorder to capture prices for the new duration
-4. Assign traders to the new duration via their `durations` array
+- **Data API** (`data-api.polymarket.com/activity`) — trader activity/trades
+- **Gamma API** (`gamma-api.polymarket.com`) — market metadata, condition IDs, settlement
+- **CLOB API** (`clob.polymarket.com/prices-history`) — price history fallback
+- **VPS rsync** (optional) — per-second price data for higher resolution
