@@ -437,8 +437,8 @@ export default function BotPage({ bot, manifest }: Props) {
         )}
       </AnimatePresence>
 
-      {/* Comments — Disqus thread reset is handled by useEffect inside Comments */}
-      <Comments botName={bot.name} />
+      {/* Comments */}
+      <Comments key={bot.name} botName={bot.name} />
     </motion.div>
   );
 }
