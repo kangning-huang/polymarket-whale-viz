@@ -517,9 +517,16 @@ async function main() {
           const timeCoverage = maxSec / dur;
           const minTimeCoverage = 0.8;
 
-          // Delete cache files with incomplete time coverage (they'll be re-fetched)
-          if (timeCoverage < minTimeCoverage) {
-            console.log(`  Removing incomplete cache ${cacheFile.split('/').pop()} (${maxSec}s/${dur}s = ${Math.round(timeCoverage * 100)}% coverage)`);
+          // Check if VPS data exists and cached data is sparse (likely API data)
+          const vpsDataExists = loadVpsPrices(wts, coin, dur) !== null;
+          const isSparseData = priceCount < dur * 0.5; // Less than 50% of seconds = likely API data
+
+          // Delete cache if: incomplete time coverage OR (sparse data AND VPS data available)
+          if (timeCoverage < minTimeCoverage || (isSparseData && vpsDataExists)) {
+            const reason = timeCoverage < minTimeCoverage
+              ? `${maxSec}s/${dur}s = ${Math.round(timeCoverage * 100)}% coverage`
+              : `sparse data (${priceCount} pts), VPS available`;
+            console.log(`  Removing cache ${cacheFile.split('/').pop()} (${reason})`);
             try { unlinkSync(cacheFile); } catch { /* ignore */ }
             // Continue to re-fetch this window
           } else {
