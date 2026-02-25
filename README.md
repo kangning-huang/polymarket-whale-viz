@@ -35,6 +35,17 @@ npm run dev
 - **Hosting**: GitHub Pages with automated deploys via GitHub Actions
 - **Data**: Ephemeral (not committed) — each build fetches the last 24h fresh
 
+## Per-Second Price Data (REQUIRED)
+
+**Windows are ONLY displayed if they have per-second VPS price data. No smooth/interpolated charts allowed.**
+
+The VPS at `76.13.103.1` runs a WebSocket price recorder that captures per-second bid/ask prices for all crypto markets. This data is synced via rsync during GitHub Actions deployment.
+
+- **Minimum requirement**: 50% of seconds must have price data (e.g., 450+ points for a 15-minute window)
+- **If charts look smooth**: The VPS recorder has stopped — SSH in and restart it
+- **Recorder location**: `/opt/polymarket/bots/monitoring/ws_price_recorder.cjs`
+- **Start command**: `RUNTIME_SEC=0 node ws_price_recorder.cjs` (runs indefinitely with 24h auto-cleanup)
+
 ## Adding traders
 
 Edit `scripts/traders.json` to add wallet addresses of traders to track.

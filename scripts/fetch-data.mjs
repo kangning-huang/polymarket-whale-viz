@@ -517,16 +517,13 @@ async function main() {
           const timeCoverage = maxSec / dur;
           const minTimeCoverage = 0.8;
 
-          // Check if VPS data exists and cached data is sparse (likely API data)
-          const vpsDataExists = loadVpsPrices(wts, coin, dur) !== null;
-          const isSparseData = priceCount < dur * 0.5; // Less than 50% of seconds = likely API data
+          // REQUIRE per-second VPS data - reject cached API data
+          const minPricePoints = Math.floor(dur * 0.5);
+          const hasPerSecondData = priceCount >= minPricePoints && timeCoverage >= minTimeCoverage;
 
-          // Delete cache if: incomplete time coverage OR (sparse data AND VPS data available)
-          if (timeCoverage < minTimeCoverage || (isSparseData && vpsDataExists)) {
-            const reason = timeCoverage < minTimeCoverage
-              ? `${maxSec}s/${dur}s = ${Math.round(timeCoverage * 100)}% coverage`
-              : `sparse data (${priceCount} pts), VPS available`;
-            console.log(`  Removing cache ${cacheFile.split('/').pop()} (${reason})`);
+          // Delete cache if it doesn't have per-second data
+          if (!hasPerSecondData) {
+            console.log(`  Removing cache ${cacheFile.split('/').pop()} (${priceCount} pts < ${minPricePoints} required)`);
             try { unlinkSync(cacheFile); } catch { /* ignore */ }
             // Continue to re-fetch this window
           } else {
@@ -652,14 +649,15 @@ async function main() {
         continue;
       }
 
-      // Filter out windows with incomplete price data
-      // Check both point count AND time coverage (max sec value should cover most of window)
+      // REQUIRE per-second VPS data - no API fallback allowed
+      // Per-second data has ~1 point per second, API data has ~1 point per minute
+      const minPricePoints = Math.floor(dur * 0.5); // At least 50% of seconds must have data
       const maxSec = Math.max(...prices.map(p => p.sec));
       const timeCoverage = maxSec / dur;
-      const minTimeCoverage = 0.8; // Require prices to cover at least 80% of window duration
+      const minTimeCoverage = 0.8;
 
-      if (timeCoverage < minTimeCoverage) {
-        console.log(`  Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — incomplete time coverage (${maxSec}s/${dur}s = ${Math.round(timeCoverage * 100)}%, need ${minTimeCoverage * 100}%)`);
+      if (prices.length < minPricePoints || timeCoverage < minTimeCoverage) {
+        console.log(`  Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — insufficient VPS data (${prices.length} pts, need ${minPricePoints}; coverage ${Math.round(timeCoverage * 100)}%)`);
         windowsSkipped++;
         continue;
       }
