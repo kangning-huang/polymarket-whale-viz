@@ -4,3 +4,4 @@ public/data
 *.log
 .DS_Store
 docs/builder_verified_tier_email_draft.md
+config/
