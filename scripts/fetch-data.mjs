@@ -332,7 +332,8 @@ function processWindowTrades(trades, windowTs, coin, dur = 900, marketSlug = nul
 
   windowTrades.sort((a, b) => a.timestamp - b.timestamp);
 
-  const processedTrades = windowTrades.map(t => ({
+  // Map raw trades to processed format
+  const rawProcessed = windowTrades.map(t => ({
     ts: t.timestamp,
     sec: t.timestamp - windowTs,
     side: t.side,
@@ -341,6 +342,34 @@ function processWindowTrades(trades, windowTs, coin, dur = 900, marketSlug = nul
     usdc: t.usdcSize,
     price: t.price,
   }));
+
+  // Aggregate split trades: combine trades with same sec/side/outcome
+  // Uses volume-weighted average price
+  const aggregated = new Map();
+  for (const t of rawProcessed) {
+    const key = `${t.sec}_${t.side}_${t.outcome}`;
+    if (aggregated.has(key)) {
+      const agg = aggregated.get(key);
+      agg.tokens += t.tokens;
+      agg.usdc += t.usdc;
+      agg.count++;
+    } else {
+      aggregated.set(key, { ...t, count: 1 });
+    }
+  }
+
+  // Convert back to array and compute VWAP
+  const processedTrades = Array.from(aggregated.values())
+    .map(t => ({
+      ts: t.ts,
+      sec: t.sec,
+      side: t.side,
+      outcome: t.outcome,
+      tokens: t.tokens,
+      usdc: t.usdc,
+      price: t.tokens > 0 ? Math.round((t.usdc / t.tokens) * 1000) / 1000 : 0,
+    }))
+    .sort((a, b) => a.sec - b.sec || a.outcome.localeCompare(b.outcome));
 
   // FIFO inventory tracking
   const inventory = { Up: [], Down: [] };
