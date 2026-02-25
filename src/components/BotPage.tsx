@@ -136,12 +136,12 @@ export default function BotPage({ bot, manifest }: Props) {
               {bot.name.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h2
+              <h1
                 className="text-2xl font-bold mb-1"
                 style={{ color: bot.color }}
               >
                 {bot.name}
-              </h2>
+              </h1>
               <p className="text-sm text-text-secondary mb-2 max-w-md">
                 {bot.description}
               </p>
@@ -183,6 +183,13 @@ export default function BotPage({ bot, manifest }: Props) {
             </div>
           </div>
         </div>
+
+        {/* Extended description for SEO */}
+        {bot.longDescription && (
+          <p className="mt-4 text-sm text-text-secondary leading-relaxed border-t border-border-subtle pt-4">
+            {bot.longDescription}
+          </p>
+        )}
       </motion.div>
 
       {/* Timeline Ribbon */}

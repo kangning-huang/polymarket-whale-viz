@@ -77,8 +77,10 @@ export interface TraderConfig {
   name: string;
   color: string;
   description?: string;
+  longDescription?: string;
   profileUrl?: string;
   screenshot?: string;
+  durations?: number[];
 }
 
 export interface Manifest {
