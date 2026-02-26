@@ -24,7 +24,7 @@ export default function WindowDetailView({ detail, traders }: Props) {
       <div className="detail-header">
         <h2>
           {detail.coin.toUpperCase()} &mdash;{' '}
-          {formatDate(detail.windowTs)} {formatTime(detail.windowTs)}&ndash;{formatTime(windowEnd)} UTC
+          {formatDate(detail.windowTs)} {formatTime(detail.windowTs)}&ndash;{formatTime(windowEnd)}
         </h2>
         <div className="settlement-badge" style={{
           color: detail.settlement.winner === 'Up' ? 'var(--green)' : 'var(--red)'

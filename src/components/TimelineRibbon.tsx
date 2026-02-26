@@ -31,12 +31,12 @@ export default function TimelineRibbon({ windows, selectedSlot, onSelect }: Prop
 
   const formatTime = (ts: number) => {
     const d = new Date(ts * 1000);
-    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
   const formatDate = (ts: number) => {
     const d = new Date(ts * 1000);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   return (
@@ -146,7 +146,7 @@ export default function TimelineRibbon({ windows, selectedSlot, onSelect }: Prop
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-sm text-text-primary">
-                          {formatTime(ts)} UTC
+                          {formatTime(ts)}
                         </span>
                         <span className="text-xs text-text-muted">
                           {formatDate(ts)}

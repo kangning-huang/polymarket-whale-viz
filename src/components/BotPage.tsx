@@ -222,7 +222,7 @@ export default function BotPage({ bot, manifest }: Props) {
               const durLabel = DURATION_LABELS[dur] || `${dur}s`;
               return (
                 <option key={key} value={key}>
-                  {formatTime(ts)} UTC — {formatDate(ts)} ({durLabel})
+                  {formatTime(ts)} — {formatDate(ts)} ({durLabel})
                 </option>
               );
             })}
@@ -304,7 +304,7 @@ export default function BotPage({ bot, manifest }: Props) {
               <h3 className="text-lg font-semibold text-text-primary">
                 {detail.coin.toUpperCase()} — {formatDate(detail.windowTs)}{' '}
                 <span className="text-text-secondary">
-                  {formatTime(detail.windowTs)}–{formatTime(detail.windowTs + (detail.duration ?? selectedDuration))} UTC
+                  {formatTime(detail.windowTs)}–{formatTime(detail.windowTs + (detail.duration ?? selectedDuration))}
                 </span>
               </h3>
               <motion.div
