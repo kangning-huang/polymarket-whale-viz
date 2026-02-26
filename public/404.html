@@ -3,6 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <title>Polybot Arena</title>
+    <!-- HTTPS enforcement -->
+    <script>
+      if (location.protocol === 'http:' && location.hostname !== 'localhost') {
+        location.replace('https:' + location.href.substring(location.protocol.length));
+      }
+    </script>
     <script>
       // GitHub Pages SPA redirect: preserves the path for BrowserRouter
       // See: https://github.com/rafgraph/spa-github-pages
