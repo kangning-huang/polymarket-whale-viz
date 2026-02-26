@@ -3,6 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- HTTPS enforcement: redirect http → https (splits authority otherwise) -->
+    <script>
+      if (location.protocol === 'http:' && location.hostname !== 'localhost') {
+        location.replace('https:' + location.href.substring(location.protocol.length));
+      }
+    </script>
     <title>Polybot Arena — Watch Trading Bots Compete on Polymarket</title>
     <meta name="description" content="Watch elite Polymarket trading bots compete in real-time. Compare bot strategies, P&L, entries and exits across crypto prediction market windows. The only bot performance dashboard with trade-level visualizations." />
     <link rel="canonical" href="https://polybot-arena.com/" />
@@ -39,6 +46,48 @@
         "price": "0",
         "priceCurrency": "USD"
       }
+    }
+    </script>
+
+    <!-- FAQPage structured data for rich snippets -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is Polybot Arena?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Polybot Arena is a free real-time dashboard that tracks and compares the most profitable automated trading bots on Polymarket's crypto prediction markets. It visualizes bot strategies, entries, exits, and P&L across 5-minute, 15-minute, and 1-hour market windows for BTC, ETH, SOL, and XRP."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do Polymarket trading bots work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Polymarket trading bots are automated programs that place trades on crypto prediction market binary outcomes. They use algorithmic strategies like mean-reversion, scalping, and momentum trading to profit from short-term price movements within timed market windows. Bots like distinct-baguette, abrak25, and 0x8dxd each use different strategies across different timeframes."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which Polymarket bots are most profitable?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The Polybot Arena leaderboard ranks bots by P&L, win rate, and trade volume. Top performers include distinct-baguette (the #1 15-minute trader with mean-reversion strategy) and abrak25 (a high-frequency 5-minute scalper generating $13K+ daily P&L). Visit the leaderboard at polybot-arena.com/leaderboard for current rankings."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What crypto markets do these bots trade?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The tracked bots trade on Polymarket's crypto prediction markets covering Bitcoin (BTC), Ethereum (ETH), Solana (SOL), and Ripple (XRP). These are binary outcome markets where traders predict whether the price will be above or below a threshold at the end of a timed window (5 minutes, 15 minutes, or 1 hour)."
+          }
+        }
+      ]
     }
     </script>
 
