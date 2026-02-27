@@ -7,6 +7,33 @@ interface Props {
   winner: 'Up' | 'Down' | string;
 }
 
+interface InfoTooltipProps {
+  id: string;
+  text: string;
+}
+
+function InfoTooltip({ id, text }: InfoTooltipProps) {
+  return (
+    <span className="relative inline-flex items-center group">
+      <button
+        type="button"
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border-subtle text-[10px] font-mono text-text-muted transition-colors hover:text-text-primary hover:border-border focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+        aria-label="How this metric is calculated"
+        aria-describedby={id}
+      >
+        i
+      </button>
+      <span
+        id={id}
+        role="tooltip"
+        className="pointer-events-none absolute left-0 top-6 z-30 w-64 rounded-md border border-border bg-elevated/95 px-2.5 py-2 text-[11px] leading-snug text-text-secondary opacity-0 invisible transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+      >
+        {text}
+      </span>
+    </span>
+  );
+}
+
 // Mini sparkline component
 function Sparkline({ data, color, height = 24 }: { data: number[]; color: string; height?: number }) {
   if (data.length < 2) return null;
@@ -178,7 +205,13 @@ export default function StatsCards({ stats, winner }: Props) {
 
       {/* Spread P&L */}
       <motion.div variants={item} className="stats-card">
-        <div className="text-xs text-text-muted mb-1">Spread P&L</div>
+        <div className="text-xs text-text-muted mb-1 flex items-center gap-1">
+          <span>Spread P&L</span>
+          <InfoTooltip
+            id="spread-pnl-tooltip"
+            text="Realized FIFO trading P&L only. For each sell, we match the oldest same-outcome buys and sum: matched tokens × (sell price − matched buy price)."
+          />
+        </div>
         <div className={`text-lg font-mono font-semibold ${
           spreadPnl >= 0 ? 'text-long' : 'text-short'
         }`}>
@@ -189,7 +222,13 @@ export default function StatsCards({ stats, winner }: Props) {
 
       {/* Settlement P&L */}
       <motion.div variants={item} className="stats-card">
-        <div className="text-xs text-text-muted mb-1">Settlement</div>
+        <div className="text-xs text-text-muted mb-1 flex items-center gap-1">
+          <span>Settlement P&L</span>
+          <InfoTooltip
+            id="settlement-pnl-tooltip"
+            text="P&L on unsold inventory at expiry: settlement value − remaining cost basis. Winners pay $1, losers pay $0."
+          />
+        </div>
         <div className={`text-lg font-mono font-semibold ${
           settlementPnl >= 0 ? 'text-long' : 'text-short'
         }`}>
