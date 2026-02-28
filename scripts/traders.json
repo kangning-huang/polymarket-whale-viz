@@ -49,6 +49,16 @@
       "profileUrl": "https://polymarket.com/@vidarx",
       "screenshot": "vidarx_pnl.png",
       "durations": [300]
+    },
+    {
+      "address": "0x0f863d92dd2b960e3eb6a23a35fd92a91981404e",
+      "name": "Qualitative",
+      "color": "#06b6d4",
+      "description": "Published profitable bot strategy, then got targeted and lost ~$5K in 18 hours.",
+      "longDescription": "Qualitative made headlines in the Polymarket bot community by publishing a detailed article analyzing profitable bot strategies (<a href=\"https://x.com/CUTNPASTE4/status/2027405725266493891\" target=\"_blank\" rel=\"noopener noreferrer\" class=\"text-accent hover:underline\">read the X thread</a>) — only to be immediately targeted by competing traders who exploited the revealed tactics. Within 18 hours of the article going live, the bot lost approximately $5,000 as adversarial bots adapted their strategies to counter the published approach. This cautionary tale demonstrates the adversarial nature of automated prediction market trading, where transparency can quickly turn alpha into a liability. The incident sparked debate about information asymmetry and whether sharing trading insights accelerates market efficiency or simply hands competitors a roadmap to your downfall.",
+      "profileUrl": "https://polymarket.com/@Qualitative",
+      "screenshot": "qualitative_pnl.png",
+      "durations": [300, 900, 3600]
     }
   ],
   "coins": ["btc", "eth", "sol", "xrp"],

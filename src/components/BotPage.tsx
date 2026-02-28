@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Manifest, TraderConfig, WindowDetail } from '../types';
 import { fetchWindowDetail, formatTime, formatDate } from '../api';
@@ -8,6 +9,7 @@ import InventoryChart from './InventoryChart';
 import StatsCards from './StatsCards';
 import TimelineRibbon from './TimelineRibbon';
 import Comments from './Comments';
+import { ShareButtons } from './ShareButtons';
 
 interface Props {
   bot: TraderConfig;
@@ -42,9 +44,25 @@ export default function BotPage({ bot, manifest }: Props) {
     [manifest.windows, bot.name]
   );
 
-  const [selectedSlot, setSelectedSlot] = useState<string>(
-    windowSlots.length > 0 ? `${windowSlots[0].ts}_${windowSlots[0].duration}` : ''
-  );
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Initialize from URL params if valid, otherwise use first window
+  const initializeFromParams = () => {
+    const ts = searchParams.get('ts');
+    const duration = searchParams.get('duration');
+
+    if (ts && duration) {
+      const slot = `${ts}_${duration}`;
+      const isValidSlot = windowSlots.some(w => `${w.ts}_${w.duration}` === slot);
+      if (isValidSlot) {
+        return slot;
+      }
+    }
+    return windowSlots.length > 0 ? `${windowSlots[0].ts}_${windowSlots[0].duration}` : '';
+  };
+
+  const [selectedSlot, setSelectedSlot] = useState<string>(initializeFromParams());
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
   const selectedWindow = selectedSlot ? Number(selectedSlot.split('_')[0]) : null;
   const selectedDuration = selectedSlot ? Number(selectedSlot.split('_')[1]) : 900;
@@ -61,14 +79,29 @@ export default function BotPage({ bot, manifest }: Props) {
       .map(w => w.coin);
   }, [manifest.windows, selectedWindow, selectedDuration, bot.name]);
 
-  const [selectedCoin, setSelectedCoin] = useState<string>(availableCoins[0] ?? 'btc');
+  const [selectedCoin, setSelectedCoin] = useState<string>('btc');
 
-  // When window changes, reset coin to first available
+  // Initialize selectedCoin from URL params or first available coin
   useEffect(() => {
-    if (availableCoins.length > 0 && !availableCoins.includes(selectedCoin)) {
-      setSelectedCoin(availableCoins[0]);
+    if (availableCoins.length > 0) {
+      const paramCoin = searchParams.get('coin');
+      if (paramCoin && availableCoins.includes(paramCoin)) {
+        setSelectedCoin(paramCoin);
+      } else if (!availableCoins.includes(selectedCoin)) {
+        setSelectedCoin(availableCoins[0]);
+      }
     }
-  }, [availableCoins, selectedCoin]);
+  }, [availableCoins, searchParams]);
+
+  // Update URL params when selection changes
+  useEffect(() => {
+    if (selectedWindow && selectedCoin) {
+      setSearchParams(
+        { ts: String(selectedWindow), coin: selectedCoin, duration: String(selectedDuration) },
+        { replace: true }
+      );
+    }
+  }, [selectedWindow, selectedCoin, selectedDuration, setSearchParams]);
 
   // Fetch window detail
   const [detail, setDetail] = useState<WindowDetail | null>(null);
@@ -180,11 +213,44 @@ export default function BotPage({ bot, manifest }: Props) {
           </div>
         </div>
 
-        {/* Extended description for SEO */}
+        {/* Extended description */}
         {bot.longDescription && (
-          <p className="mt-4 text-sm text-text-secondary leading-relaxed border-t border-border-subtle pt-4">
-            {bot.longDescription}
-          </p>
+          <div className="mt-4 border-t border-border-subtle pt-4">
+            <AnimatePresence mode="wait">
+              {isDescriptionExpanded ? (
+                <motion.div
+                  key="expanded"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <p
+                    className="text-sm text-text-secondary leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: bot.longDescription }}
+                  />
+                  <button
+                    onClick={() => setIsDescriptionExpanded(false)}
+                    className="mt-2 text-xs text-accent hover:text-accent-hover hover:underline transition-colors"
+                  >
+                    Show less ↑
+                  </button>
+                </motion.div>
+              ) : (
+                <motion.button
+                  key="collapsed"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={() => setIsDescriptionExpanded(true)}
+                  className="text-xs text-accent hover:text-accent-hover hover:underline transition-colors"
+                >
+                  Read full story ↓
+                </motion.button>
+              )}
+            </AnimatePresence>
+          </div>
         )}
       </motion.div>
 
@@ -299,34 +365,46 @@ export default function BotPage({ bot, manifest }: Props) {
             exit={{ opacity: 0 }}
             className="space-y-6"
           >
-            {/* Window header */}
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <h3 className="text-lg font-semibold text-text-primary">
-                {detail.coin.toUpperCase()} — {formatDate(detail.windowTs)}{' '}
-                <span className="text-text-secondary">
-                  {formatTime(detail.windowTs)}–{formatTime(detail.windowTs + (detail.duration ?? selectedDuration))}
-                </span>
-              </h3>
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className={`px-4 py-2 rounded-full font-mono text-sm font-semibold ${
-                  detail.settlement.winner === 'Up'
-                    ? 'bg-long/20 text-long border border-long/30'
-                    : 'bg-short/20 text-short border border-short/30'
-                }`}
-                style={{
-                  boxShadow: detail.settlement.winner === 'Up'
-                    ? '0 0 20px rgba(34, 197, 94, 0.2)'
-                    : '0 0 20px rgba(239, 68, 68, 0.2)'
-                }}
-              >
-                {detail.settlement.winner} wins @ {(detail.settlement.upPrice * 100).toFixed(0)}c
-              </motion.div>
-            </div>
+            {/* Share buttons */}
+            <ShareButtons
+              botName={bot.name}
+              coin={detail.coin}
+              windowTs={detail.windowTs}
+              duration={detail.duration ?? selectedDuration}
+              netPnl={traderData.stats.netPnl}
+              shareableUrl={`${window.location.origin}/bot/${bot.name}?ts=${detail.windowTs}&coin=${detail.coin}&duration=${detail.duration ?? selectedDuration}`}
+            />
 
-            {/* Stats cards */}
-            <StatsCards stats={traderData.stats} winner={detail.settlement.winner} />
+            {/* Shareable content wrapper for screenshots */}
+            <div id="shareable-content">
+              {/* Window header */}
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <h3 className="text-lg font-semibold text-text-primary">
+                  {detail.coin.toUpperCase()} — {formatDate(detail.windowTs)}{' '}
+                  <span className="text-text-secondary">
+                    {formatTime(detail.windowTs)}–{formatTime(detail.windowTs + (detail.duration ?? selectedDuration))}
+                  </span>
+                </h3>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className={`px-4 py-2 rounded-full font-mono text-sm font-semibold ${
+                    detail.settlement.winner === 'Up'
+                      ? 'bg-long/20 text-long border border-long/30'
+                      : 'bg-short/20 text-short border border-short/30'
+                  }`}
+                  style={{
+                    boxShadow: detail.settlement.winner === 'Up'
+                      ? '0 0 20px rgba(34, 197, 94, 0.2)'
+                      : '0 0 20px rgba(239, 68, 68, 0.2)'
+                  }}
+                >
+                  {detail.settlement.winner} wins @ {(detail.settlement.upPrice * 100).toFixed(0)}c
+                </motion.div>
+              </div>
+
+              {/* Stats cards */}
+              <StatsCards stats={traderData.stats} winner={detail.settlement.winner} />
 
             {/* Price chart */}
             <ErrorBoundary fallback="PriceChart">
@@ -424,6 +502,7 @@ export default function BotPage({ bot, manifest }: Props) {
                 )}
               </AnimatePresence>
             </div>
+            </div>{/* End shareable-content */}
           </motion.div>
         )}
 
