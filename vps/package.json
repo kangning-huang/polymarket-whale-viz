@@ -1,0 +1,26 @@
+{
+  "name": "polybot-arena-live-backend",
+  "version": "1.0.0",
+  "description": "Real-time SSE backend for Polybot Arena live trading view",
+  "type": "module",
+  "main": "api/live-endpoint.mjs",
+  "scripts": {
+    "start": "node api/live-endpoint.mjs",
+    "aggregator": "node ws_live_aggregator.cjs",
+    "dev": "node --watch api/live-endpoint.mjs",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop ecosystem.config.cjs",
+    "pm2:restart": "pm2 restart ecosystem.config.cjs",
+    "pm2:logs": "pm2 logs"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "pm2": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
