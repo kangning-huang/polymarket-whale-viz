@@ -27,10 +27,10 @@ const today = new Date().toISOString().split('T')[0];
 
 const urls = [
   { loc: '/', changefreq: 'hourly', priority: '1.0' },
-  { loc: '/leaderboard', changefreq: 'hourly', priority: '0.9' },
-  { loc: '/blog/how-polymarket-bots-trade', changefreq: 'monthly', priority: '0.8' },
+  { loc: '/leaderboard/', changefreq: 'hourly', priority: '0.9' },
+  { loc: '/blog/how-polymarket-bots-trade/', changefreq: 'monthly', priority: '0.8' },
   ...traders.traders.map(t => ({
-    loc: `/bot/${t.name}`,
+    loc: `/bot/${t.name}/`,
     changefreq: 'hourly',
     priority: '0.8',
   })),
@@ -203,7 +203,7 @@ function generateBotJsonLd(trader) {
     '@context': 'https://schema.org',
     '@type': 'ProfilePage',
     name: `${trader.name} — Polymarket Trading Bot`,
-    url: `${BASE_URL}/bot/${trader.name}`,
+    url: `${BASE_URL}/bot/${trader.name}/`,
     description: trader.longDescription || trader.description,
     mainEntity: {
       '@type': 'Thing',
@@ -220,7 +220,7 @@ function generateLeaderboardJsonLd() {
     '@context': 'https://schema.org',
     '@type': 'WebPage',
     name: 'Polymarket Bot Leaderboard',
-    url: `${BASE_URL}/leaderboard`,
+    url: `${BASE_URL}/leaderboard/`,
     description: 'Compare the top Polymarket trading bots ranked by P&L, win rate, and trade volume.',
     isPartOf: { '@type': 'WebApplication', name: 'Polybot Arena', url: BASE_URL },
   });
@@ -231,7 +231,7 @@ function generateBlogJsonLd() {
     '@context': 'https://schema.org',
     '@type': 'Article',
     headline: 'How Polymarket Bots Actually Trade: Real Data Analysis',
-    url: `${BASE_URL}/blog/how-polymarket-bots-trade`,
+    url: `${BASE_URL}/blog/how-polymarket-bots-trade/`,
     description: 'Deep dive into how automated trading bots operate on Polymarket crypto prediction markets.',
     author: { '@type': 'Organization', name: 'Polybot Arena', url: BASE_URL },
     publisher: { '@type': 'Organization', name: 'Polybot Arena', url: BASE_URL },
@@ -297,7 +297,9 @@ function createRouteHtml(path, { title, description, staticContent, jsonLd }) {
   const fullTitle = title
     ? `${title} | Polybot Arena`
     : 'Polybot Arena — Watch Trading Bots Compete on Polymarket';
-  const canonicalUrl = `${BASE_URL}${path}`;
+  // Ensure trailing slash for canonical URL (matches GitHub Pages directory serving)
+  const canonicalPath = path === '/' ? '/' : path.replace(/\/?$/, '/');
+  const canonicalUrl = `${BASE_URL}${canonicalPath}`;
 
   let html = indexHtml;
 
