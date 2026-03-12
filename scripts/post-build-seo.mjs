@@ -50,6 +50,32 @@ ${urls.map(u => `  <url>
 writeFileSync(join(DIST, 'sitemap.xml'), sitemap);
 console.log(`✓ Generated sitemap.xml with ${urls.length} URLs`);
 
+// ─── 1b. Generate llms.txt dynamically ──────────────────────────────────────
+const llmsTxt = `# Polybot Arena
+
+> Polybot Arena is a real-time dashboard where automated trading bots compete in Polymarket's crypto prediction markets. Track bot strategies, entries, exits, and P&L across BTC, ETH, SOL, and XRP markets.
+
+## About
+
+Polybot Arena tracks the most profitable automated trading bots on Polymarket — the largest crypto prediction market platform. The dashboard provides per-second price charts, trade-level visualizations, and performance analytics for bots trading 5-minute, 15-minute, and 1-hour binary outcome windows.
+
+The platform is free, open-source, and updated every 2 hours with live market data.
+
+## Pages
+
+- [Home](${BASE_URL}/): Main dashboard with all active trading bots
+- [Bot Leaderboard](${BASE_URL}/leaderboard/): Rankings by P&L, win rate, and trade volume
+- [How Bots Trade](${BASE_URL}/blog/how-polymarket-bots-trade/): Data-driven analysis of bot trading strategies
+${traders.traders.map(t => `- [${t.name}](${BASE_URL}/bot/${t.name}/): ${t.description}`).join('\n')}
+
+## Full Documentation
+
+For comprehensive details about each bot, trading strategies, and technical architecture, see [llms-full.txt](${BASE_URL}/llms-full.txt).
+`;
+
+writeFileSync(join(DIST, 'llms.txt'), llmsTxt);
+console.log('✓ Generated llms.txt for AI crawlers');
+
 // ─── 2. Static content generators ──────────────────────────────────────────
 // These produce meaningful HTML that crawlers can index immediately,
 // without waiting for JavaScript execution. React's createRoot will
@@ -187,11 +213,17 @@ function generateLandingJsonLd() {
     '@type': 'WebApplication',
     name: 'Polybot Arena',
     url: BASE_URL,
-    description: 'Real-time dashboard tracking and comparing the most profitable trading bots on Polymarket crypto prediction markets.',
+    description: 'Real-time dashboard tracking and comparing the most profitable trading bots on Polymarket crypto prediction markets. Features per-second price charts, trade-level visualizations, and P&L analytics across BTC, ETH, SOL, and XRP prediction markets.',
     applicationCategory: 'FinanceApplication',
     operatingSystem: 'Web',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     author: { '@type': 'Organization', name: 'Polybot Arena', url: BASE_URL },
+    about: {
+      '@type': 'Thing',
+      name: 'Polymarket Trading Bot Analytics',
+      description: 'Automated trading bot performance tracking for Polymarket crypto prediction markets',
+    },
+    keywords: 'Polymarket bot, trading bot, prediction market, crypto bot, bot leaderboard, automated trading',
   });
 }
 
@@ -199,19 +231,30 @@ function generateBotJsonLd(trader) {
   const durationDesc = (trader.durations || [900])
     .map(d => DURATION_LABELS[d] || `${d}s`)
     .join(', ');
+  // Strip HTML tags from longDescription for JSON-LD
+  const plainDesc = (trader.longDescription || trader.description).replace(/<[^>]*>/g, '');
   return JSON.stringify({
     '@context': 'https://schema.org',
     '@type': 'ProfilePage',
     name: `${trader.name} — Polymarket Trading Bot`,
     url: `${BASE_URL}/bot/${trader.name}/`,
-    description: trader.longDescription || trader.description,
+    description: plainDesc,
+    dateModified: today,
     mainEntity: {
       '@type': 'Thing',
       name: trader.name,
-      description: `${durationDesc} crypto prediction market trading bot on Polymarket`,
+      description: `${durationDesc} crypto prediction market trading bot on Polymarket. ${trader.description}`,
       url: trader.profileUrl,
+      additionalType: 'https://schema.org/SoftwareApplication',
     },
     isPartOf: { '@type': 'WebApplication', name: 'Polybot Arena', url: BASE_URL },
+    breadcrumb: {
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: BASE_URL },
+        { '@type': 'ListItem', position: 2, name: trader.name, item: `${BASE_URL}/bot/${trader.name}/` },
+      ],
+    },
   });
 }
 
@@ -232,12 +275,31 @@ function generateBlogJsonLd() {
     '@type': 'Article',
     headline: 'How Polymarket Bots Actually Trade: Real Data Analysis',
     url: `${BASE_URL}/blog/how-polymarket-bots-trade/`,
-    description: 'Deep dive into how automated trading bots operate on Polymarket crypto prediction markets.',
+    description: 'Deep dive into how automated trading bots operate on Polymarket crypto prediction markets. Covers mean-reversion, high-frequency scalping, CEX latency arbitrage, and Black-Scholes strategies used by top bots.',
     author: { '@type': 'Organization', name: 'Polybot Arena', url: BASE_URL },
-    publisher: { '@type': 'Organization', name: 'Polybot Arena', url: BASE_URL },
+    publisher: {
+      '@type': 'Organization',
+      name: 'Polybot Arena',
+      url: BASE_URL,
+      logo: { '@type': 'ImageObject', url: `${BASE_URL}/images/banner%20short%20dark%20high-res-v3.png` },
+    },
     datePublished: '2026-02-01',
     dateModified: today,
+    mainEntityOfPage: `${BASE_URL}/blog/how-polymarket-bots-trade/`,
+    about: [
+      { '@type': 'Thing', name: 'Polymarket', description: 'Crypto prediction market platform' },
+      { '@type': 'Thing', name: 'Automated Trading', description: 'Algorithmic trading bots' },
+    ],
+    keywords: 'Polymarket bot strategy, trading bot analysis, prediction market bots, mean reversion, HFT scalping, latency arbitrage',
     isPartOf: { '@type': 'WebApplication', name: 'Polybot Arena', url: BASE_URL },
+    breadcrumb: {
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: BASE_URL },
+        { '@type': 'ListItem', position: 2, name: 'Blog', item: `${BASE_URL}/blog/` },
+        { '@type': 'ListItem', position: 3, name: 'How Polymarket Bots Trade', item: `${BASE_URL}/blog/how-polymarket-bots-trade/` },
+      ],
+    },
   });
 }
 

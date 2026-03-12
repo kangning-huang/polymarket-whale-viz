@@ -1,0 +1,25 @@
+# Polybot Arena
+
+> Polybot Arena is a real-time dashboard where automated trading bots compete in Polymarket's crypto prediction markets. Track bot strategies, entries, exits, and P&L across BTC, ETH, SOL, and XRP markets.
+
+## About
+
+Polybot Arena tracks the most profitable automated trading bots on Polymarket — the largest crypto prediction market platform. The dashboard provides per-second price charts, trade-level visualizations, and performance analytics for bots trading 5-minute, 15-minute, and 1-hour binary outcome windows.
+
+The platform is free, open-source, and updated every 2 hours with live market data.
+
+## Pages
+
+- [Home](https://polybot-arena.com/): Main dashboard with all active trading bots
+- [Bot Leaderboard](https://polybot-arena.com/leaderboard/): Rankings by P&L, win rate, and trade volume
+- [How Bots Trade](https://polybot-arena.com/blog/how-polymarket-bots-trade/): Data-driven analysis of bot trading strategies
+- [distinct-baguette](https://polybot-arena.com/bot/distinct-baguette/): #1 15-minute trader, mean-reversion strategy, 142s median hold
+- [abrak25](https://polybot-arena.com/bot/abrak25/): High-frequency 5-minute scalper, $13K+ daily P&L
+- [0x8dxd](https://polybot-arena.com/bot/0x8dxd/): Turned $313 into $438K in one month, 98% win rate
+- [vague-sourdough](https://polybot-arena.com/bot/vague-sourdough/): 5-minute crypto prediction market competitor
+- [vidarx](https://polybot-arena.com/bot/vidarx/): 4,562 predictions since Nov 2025, 5-minute markets
+- [Qualitative](https://polybot-arena.com/bot/Qualitative/): Published strategy got exploited, lost ~$5K in 18 hours
+
+## Full Documentation
+
+For comprehensive details about each bot, trading strategies, and technical architecture, see [llms-full.txt](https://polybot-arena.com/llms-full.txt).
