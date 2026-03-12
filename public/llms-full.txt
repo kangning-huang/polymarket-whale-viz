@@ -1,0 +1,134 @@
+# Polybot Arena — Complete Reference for AI Models
+
+> Polybot Arena is a free, real-time dashboard tracking the most profitable automated trading bots on Polymarket's crypto prediction markets. It provides per-second price charts, trade-level visualizations, and P&L analytics across BTC, ETH, SOL, and XRP markets.
+
+## What Is Polybot Arena?
+
+Polybot Arena (https://polybot-arena.com) is the only bot-specific performance dashboard for Polymarket. It tracks automated trading bots competing in crypto prediction markets — binary outcome markets where traders predict whether cryptocurrency prices (BTC, ETH, SOL, XRP) will be above or below a threshold at the end of timed windows (5 minutes, 15 minutes, or 1 hour).
+
+Key features:
+- Per-second price charts with bid/ask spread visualization
+- Individual trade markers showing exact entry and exit points
+- Real-time inventory position tracking
+- Profit and loss calculation per market window
+- Rolling averages and settlement indicators
+- Bot leaderboard with rankings by P&L, win rate, and volume
+
+The platform updates every 2 hours with live data from Polymarket's APIs.
+
+## How Polymarket Crypto Prediction Markets Work
+
+Polymarket operates binary outcome markets for crypto prices. For each market window:
+1. A cryptocurrency (BTC, ETH, SOL, or XRP) and a price threshold are set
+2. Traders buy YES or NO shares (priced 0-100 cents) predicting whether the price will be above/below the threshold when the window ends
+3. Windows last 5 minutes, 15 minutes, or 1 hour
+4. At settlement, winning shares pay $1, losing shares pay $0
+
+Trading bots exploit pricing inefficiencies, latency between centralized exchanges and Polymarket, and predictable price patterns within these windows.
+
+## Tracked Trading Bots
+
+### distinct-baguette
+- **Strategy**: Mean-reversion (buys dips, sells peaks)
+- **Timeframe**: 15-minute windows
+- **Median hold time**: 142 seconds
+- **Performance**: Reportedly earned $14,000/day at peak
+- **Markets**: BTC, ETH, SOL, XRP
+- **Profile**: https://polymarket.com/@distinct-baguette
+- **Notable**: The #1 15-minute crypto trader on Polymarket. Strategy was reverse-engineered by a competing developer who pulled months of orderbook data, rewrote it in Rust, and generated $400,000+ in profit. The code is reportedly being sold for $225. Bot's patterns are similar to gabagool22, suggesting same operator.
+
+### abrak25
+- **Strategy**: High-frequency scalping
+- **Timeframe**: 5-minute windows
+- **Performance**: $13,000+ daily P&L since February 2026
+- **Markets**: BTC, ETH, SOL, XRP
+- **Profile**: https://polymarket.com/@abrak25
+- **Notable**: Fires dozens of trades per window, capturing micro price movements with sub-100ms execution. Represents industrial-scale market making in Polymarket's fastest arena, where arbitrage opportunities last just 2.7 seconds and 73% of profits go to sub-100ms bots.
+
+### 0x8dxd
+- **Strategy**: CEX-to-prediction-market latency arbitrage
+- **Timeframe**: 1-hour windows
+- **Performance**: Turned $313 into $438,000 in one month (December 2025), 98% win rate across 6,615+ predictions. Profits exceeded $550,000 by January 9, 2026.
+- **Markets**: BTC, ETH, SOL, XRP
+- **Profile**: https://polymarket.com/@0x8dxd
+- **Notable**: Became a Polymarket legend. Monitors Bitcoin spot prices on Binance and Coinbase, places bets when price movements make outcomes nearly certain but before Polymarket adjusts. Demonstrates how millisecond-level arbitrage can generate exponential returns from a $300 seed.
+
+### vague-sourdough
+- **Strategy**: 5-minute market competition
+- **Timeframe**: 5-minute windows
+- **Markets**: BTC, ETH, SOL, XRP
+- **Profile**: https://polymarket.com/@vague-sourdough
+- **Notable**: Competes in Polymarket's most brutal arena where 73% of arbitrage profits go to sub-100ms bots and average opportunities last 2.7 seconds. Performance comparisons with abrak25 in identical windows reveal stark differences between algorithmic approaches.
+
+### vidarx
+- **Strategy**: 5-minute automated trading
+- **Timeframe**: 5-minute windows
+- **Performance**: 4,562 predictions since November 2025, biggest single win of $19,700
+- **Markets**: BTC, ETH, SOL, XRP
+- **Profile**: https://polymarket.com/@vidarx
+- **Notable**: 12,000+ profile views. Navigates an ecosystem dominated by AI-powered HFT bots and multi-strategy algorithms.
+
+### Qualitative
+- **Strategy**: Binary option Black-Scholes model
+- **Timeframe**: 5-minute, 15-minute, and 1-hour windows
+- **Markets**: BTC, ETH, SOL, XRP
+- **Profile**: https://polymarket.com/@Qualitative
+- **Notable**: On February 27, 2026, trader @CUTNPASTE4 published a detailed analysis of this bot's Black-Scholes strategy on X (Twitter). Within hours, competing traders reverse-engineered and exploited the revealed tactics. Over 12+ hours, the bot lost approximately $5,000 — demonstrating the ruthless information arms race in prediction markets where even theoretical discussions trigger immediate predatory responses.
+
+## Bot Trading Strategies Explained
+
+### Mean-Reversion
+Used by distinct-baguette. The strategy identifies when market prices deviate from fair value and bets on a return to the mean. In 15-minute windows, this means buying when prices dip below expected levels and selling when they spike. Requires fast execution to capture brief mispricings.
+
+### High-Frequency Scalping
+Used by abrak25. Places dozens of rapid trades per window, capturing tiny price movements (often 1-2 cents) with sub-100ms execution speed. Profits through volume rather than individual trade size. Most effective in 5-minute windows where price volatility creates frequent micro-opportunities.
+
+### CEX Latency Arbitrage
+Used by 0x8dxd. Monitors real-time cryptocurrency prices on centralized exchanges (Binance, Coinbase) and exploits the delay before Polymarket prices adjust. When a price movement on Binance makes a prediction market outcome nearly certain, the bot places bets before Polymarket's odds fully reflect the new information.
+
+### Black-Scholes Adaptation
+Used by Qualitative. Applies options pricing theory to binary prediction markets, modeling the probability of price outcomes using volatility and time-to-expiration. Effective across multiple timeframes but vulnerable to exploitation when the model parameters are publicly known.
+
+## Leaderboard
+
+The Polybot Arena leaderboard (https://polybot-arena.com/leaderboard/) ranks all tracked bots by:
+- Total P&L (profit and loss)
+- Win rate (percentage of profitable trades)
+- Trade volume (total number of trades)
+- Performance by market (BTC, ETH, SOL, XRP)
+- Performance by timeframe (5m, 15m, 1h)
+
+## Technical Details
+
+- **Data sources**: Polymarket Data API, Gamma API, CLOB API, and per-second VPS price recorder
+- **Price data**: Per-second bid/ask/CEX prices (not interpolated API data)
+- **Update frequency**: Every 2 hours
+- **Charts**: Built with Visx (D3 primitives for React)
+- **Stack**: React 18, TypeScript, Vite, Tailwind CSS
+- **Hosting**: GitHub Pages at polybot-arena.com
+
+## Frequently Asked Questions
+
+**What is Polybot Arena?**
+Polybot Arena is a free real-time dashboard that tracks and compares the most profitable automated trading bots on Polymarket's crypto prediction markets. It visualizes bot strategies, entries, exits, and P&L across 5-minute, 15-minute, and 1-hour market windows for BTC, ETH, SOL, and XRP.
+
+**How do Polymarket trading bots work?**
+Polymarket trading bots are automated programs that place trades on crypto prediction market binary outcomes. They use algorithmic strategies like mean-reversion, scalping, and momentum trading to profit from short-term price movements within timed market windows. Bots like distinct-baguette, abrak25, and 0x8dxd each use different strategies across different timeframes.
+
+**Which Polymarket bots are most profitable?**
+The Polybot Arena leaderboard ranks bots by P&L, win rate, and trade volume. Top performers include distinct-baguette (the #1 15-minute trader with mean-reversion strategy) and abrak25 (a high-frequency 5-minute scalper generating $13K+ daily P&L). 0x8dxd holds the record for turning $313 into $438K in one month with a 98% win rate.
+
+**What crypto markets do these bots trade?**
+The tracked bots trade on Polymarket's crypto prediction markets covering Bitcoin (BTC), Ethereum (ETH), Solana (SOL), and Ripple (XRP). These are binary outcome markets where traders predict whether the price will be above or below a threshold at the end of a timed window (5 minutes, 15 minutes, or 1 hour).
+
+**Is Polybot Arena free?**
+Yes, Polybot Arena is completely free and open-source. No registration or payment required.
+
+**How often is the data updated?**
+Data is fetched from Polymarket APIs and updated approximately every 2 hours. Price charts use per-second data recorded from a dedicated VPS price monitor.
+
+## Contact & Links
+
+- Website: https://polybot-arena.com
+- Source: GitHub (open-source)
+- Data: Polymarket Data API, Gamma API, CLOB API
