@@ -28,6 +28,7 @@ const windowDurations = config.windowDurations || [windowSec];
 const DURATION_LABELS = { 900: '15m', 300: '5m', 3600: '1h' };
 const COVERAGE_THRESHOLD = 0.9;
 const CANONICAL_VPS_PRICES_PATH = '/opt/polymarket/data/raw/prices/';
+const MAX_EDGE_GAP_SEC = 5;
 
 const DELAY_MS = 100;
 const REQUEST_TIMEOUT = 8000;
@@ -100,6 +101,39 @@ function getCoverageStats(prices, duration) {
     requiredSeconds: minCoveragePoints(duration),
     coverageRatio: duration > 0 ? coveredSeconds / duration : 0,
   };
+}
+
+function densifyPriceSeries(points, windowTs, duration) {
+  if (!points.length) return null;
+
+  const sorted = [...points].sort((a, b) => a.sec - b.sec);
+  const firstSec = sorted[0].sec;
+  const lastSec = sorted[sorted.length - 1].sec;
+
+  if (firstSec > MAX_EDGE_GAP_SEC || lastSec < duration - 1 - MAX_EDGE_GAP_SEC) {
+    return null;
+  }
+
+  const bySec = new Map(sorted.map(point => [point.sec, point]));
+  const dense = [];
+  let last = sorted[0];
+
+  for (let sec = 0; sec < duration; sec++) {
+    const point = bySec.get(sec);
+    if (point) {
+      last = point;
+      dense.push(point);
+      continue;
+    }
+
+    dense.push({
+      ...last,
+      sec,
+      t: windowTs + sec,
+    });
+  }
+
+  return dense;
 }
 
 // For 5m/15m markets: timestamp-based slug
@@ -194,13 +228,14 @@ function loadVpsPrices(windowTs, coin, duration = 900) {
       });
     }
 
-    const points = Array.from(pointsBySec.values()).sort((a, b) => a.sec - b.sec);
-    const coverage = getCoverageStats(points, duration);
+    const observedPoints = Array.from(pointsBySec.values()).sort((a, b) => a.sec - b.sec);
+    const sourceCoverage = getCoverageStats(observedPoints, duration);
+    const points = densifyPriceSeries(observedPoints, windowTs, duration);
 
-    if (coverage.coveredSeconds < coverage.requiredSeconds) {
+    if (!points) {
       console.warn(
-        `  ⚠️  VPS data too sparse after parsing: ${coverage.coveredSeconds}/${duration} seconds ` +
-        `(${Math.round(coverage.coverageRatio * 100)}%, need ${coverage.requiredSeconds})`
+        `  ⚠️  VPS data missing leading/trailing coverage: ${coin.toUpperCase()} ${durLabel} ` +
+        `${sourceCoverage.coveredSeconds}/${duration}s observed`
       );
       return null;
     }
