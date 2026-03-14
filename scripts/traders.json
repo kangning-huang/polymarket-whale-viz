@@ -65,5 +65,5 @@
   "refTs": 1770435000,
   "windowDurations": [900, 300, 3600],
   "windowSec": 900,
-  "lookbackHours": 24
+  "lookbackHours": 48
 }

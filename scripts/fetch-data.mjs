@@ -517,16 +517,19 @@ async function main() {
           const timeCoverage = maxSec / dur;
           const minTimeCoverage = 0.8;
 
-          // REQUIRE per-second VPS data - reject cached API data
+          // Check if we have per-second VPS data (preferred) or API-only data (degraded)
           const minPricePoints = Math.floor(dur * 0.5);
           const hasPerSecondData = priceCount >= minPricePoints && timeCoverage >= minTimeCoverage;
 
-          // Delete cache if it doesn't have per-second data
-          if (!hasPerSecondData) {
-            console.log(`  Removing cache ${cacheFile.split('/').pop()} (${priceCount} pts < ${minPricePoints} required)`);
+          // Accept cached windows even with API-only data (shows degraded but not empty)
+          if (priceCount < 3) {
+            console.log(`  Removing cache ${cacheFile.split('/').pop()} (${priceCount} pts — too few)`);
             try { unlinkSync(cacheFile); } catch { /* ignore */ }
             // Continue to re-fetch this window
           } else {
+            if (!hasPerSecondData) {
+              console.log(`  Using degraded cache ${cacheFile.split('/').pop()} (${priceCount} pts, need ${minPricePoints} for full quality)`);
+            }
             const entry = { windowTs: wts, coin, duration: dur, priceCount, traders: [] };
             for (const [name, data] of Object.entries(cached.traders || {})) {
               entry.traders.push({
@@ -649,17 +652,15 @@ async function main() {
         continue;
       }
 
-      // REQUIRE per-second VPS data - no API fallback allowed
-      // Per-second data has ~1 point per second, API data has ~1 point per minute
-      const minPricePoints = Math.floor(dur * 0.5); // At least 50% of seconds must have data
+      // Check price data quality — prefer VPS per-second data but allow API fallback
+      const minPricePoints = Math.floor(dur * 0.5);
       const maxSec = Math.max(...prices.map(p => p.sec));
       const timeCoverage = maxSec / dur;
       const minTimeCoverage = 0.8;
+      const hasPerSecondData = prices.length >= minPricePoints && timeCoverage >= minTimeCoverage;
 
-      if (prices.length < minPricePoints || timeCoverage < minTimeCoverage) {
-        console.log(`  Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — insufficient VPS data (${prices.length} pts, need ${minPricePoints}; coverage ${Math.round(timeCoverage * 100)}%)`);
-        windowsSkipped++;
-        continue;
+      if (!hasPerSecondData) {
+        console.log(`  ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — degraded price data (${prices.length} pts, need ${minPricePoints} for full quality; coverage ${Math.round(timeCoverage * 100)}%)`);
       }
 
       // Write window detail
