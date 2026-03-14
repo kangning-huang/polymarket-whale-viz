@@ -20,6 +20,14 @@ const fs = require("fs");
 const path = require("path");
 const WS = globalThis.WebSocket || require("ws");
 const WS_OPEN = WS.OPEN != null ? WS.OPEN : 1;
+const DEFAULT_VPS_OUT_DIR = "/opt/polymarket/data/raw/prices";
+
+function resolveDefaultOutDir() {
+  if (process.env.OUT_DIR) return process.env.OUT_DIR;
+  return process.cwd().startsWith("/opt/polymarket/")
+    ? DEFAULT_VPS_OUT_DIR
+    : path.join("data", "raw", "prices");
+}
 
 const CFG = {
   wsBase: process.env.POLY_WS_BASE || "wss://ws-subscriptions-clob.polymarket.com",
@@ -40,7 +48,7 @@ const CFG = {
   expiryBufferSec: Number(process.env.EXPIRY_BUFFER_SEC || 120),
   cleanupIntervalSec: Number(process.env.CLEANUP_INTERVAL_SEC || 3600), // hourly
   retentionSec: Number(process.env.RETENTION_SEC || 86400), // 24h
-  outDir: process.env.OUT_DIR || path.join("data", "raw", "prices"),
+  outDir: resolveDefaultOutDir(),
 };
 
 const DURATION_LABELS = { 900: "15m", 300: "5m", 3600: "1h" };
@@ -51,12 +59,17 @@ const BINANCE_SYMS = {
   sol: "solusdt",
   xrp: "xrpusdt",
 };
+const BINANCE_COIN_BY_SYMBOL = Object.fromEntries(
+  Object.entries(BINANCE_SYMS).map(([coin, sym]) => [sym, coin.toUpperCase()])
+);
+const HOURLY_LOOKAHEAD_SEC = Number(process.env.HOURLY_LOOKAHEAD_SEC || 7200);
 
 let polyWs = null;
 let binWs = null;
 let manualClose = false;
 let shuttingDown = false;
 let startMs = Date.now();
+let refreshInFlight = false;
 
 // assetId -> { coin, outcome, windowStart, windowEnd, conditionId, slug }
 const assetMap = new Map();
@@ -122,18 +135,21 @@ function round(v, d = 6) {
   return Math.round(v * m) / m;
 }
 
-function parseLevels(levels, side) {
-  if (!Array.isArray(levels)) return [];
-  const parsed = levels
-    .map((l) => ({ price: Number(l.price), size: Number(l.size) }))
-    .filter((l) => Number.isFinite(l.price) && Number.isFinite(l.size) && l.size > 0);
-  parsed.sort((a, b) => (side === "bid" ? b.price - a.price : a.price - b.price));
-  return parsed;
-}
-
 function bestOf(levels, side) {
-  const arr = parseLevels(levels, side);
-  return arr.length ? arr[0] : null;
+  if (!Array.isArray(levels) || levels.length === 0) return null;
+  let best = null;
+  for (const level of levels) {
+    const price = Number(level.price);
+    const size = Number(level.size);
+    if (!Number.isFinite(price) || !Number.isFinite(size) || size <= 0) continue;
+    if (
+      !best ||
+      (side === "bid" ? price > best.price : price < best.price)
+    ) {
+      best = { price, size };
+    }
+  }
+  return best;
 }
 
 async function gammaGet(ep) {
@@ -218,6 +234,7 @@ const HOURLY_SERIES = {
 async function discoverHourlyMarkets() {
   const now = nowSec();
   const out = [];
+  const maxWindowEnd = now + HOURLY_LOOKAHEAD_SEC + CFG.expiryBufferSec;
 
   for (const coin of CFG.coins) {
     const seriesSlug = HOURLY_SERIES[coin];
@@ -229,14 +246,14 @@ async function discoverHourlyMarkets() {
       if (!series?.length || !series[0].events?.length) continue;
 
       // Find active, non-closed events (series endpoint doesn't include markets array)
-      const activeEvents = series[0].events.filter(ev => ev.active && !ev.closed);
+      const activeEvents = series[0].events.filter(ev => {
+        if (!ev.active || ev.closed || !ev.endDate) return false;
+        const windowEnd = Math.floor(new Date(ev.endDate).getTime() / 1000);
+        return windowEnd >= now && windowEnd <= maxWindowEnd;
+      });
 
       for (const ev of activeEvents) {
-        // Check window timing using event's endDate
-        const endDateStr = ev.endDate;
-        if (!endDateStr) continue;
-
-        const windowEnd = Math.floor(new Date(endDateStr).getTime() / 1000);
+        const windowEnd = Math.floor(new Date(ev.endDate).getTime() / 1000);
         const windowStart = windowEnd - 3600; // 1 hour before end
 
         // Skip if window already ended or about to end
@@ -267,8 +284,6 @@ async function discoverHourlyMarkets() {
           upToken: tokenIds[upIdx],
           downToken: tokenIds[dnIdx],
         });
-
-        log(`hourly: found ${coin.toUpperCase()} ${mkt.slug} (${windowStart}-${windowEnd})`);
       }
     } catch (e) {
       log(`hourly discovery error for ${coin}: ${e.message}`);
@@ -483,9 +498,8 @@ function connectBinance() {
         const wrapper = JSON.parse(toUtf8(raw));
         const msg = wrapper.data || wrapper;
         const sym = String(msg.s || "").toLowerCase();
-        const entry = Object.entries(BINANCE_SYMS).find(([, v]) => v === sym);
-        if (!entry) return;
-        const coin = entry[0].toUpperCase();
+        const coin = BINANCE_COIN_BY_SYMBOL[sym];
+        if (!coin) return;
         const price = toNumber(msg.p);
         if (!Number.isFinite(price) || price <= 0) return;
 
@@ -584,6 +598,8 @@ function cleanupOldFiles() {
 // ── Background Loops ──
 
 async function refreshLoop() {
+  if (refreshInFlight) return;
+  refreshInFlight = true;
   try {
     const mkts = await discoverMarkets();
     const changed = registerMarkets(mkts);
@@ -592,6 +608,8 @@ async function refreshLoop() {
     if (changed) subscribeNewAssets();
   } catch (e) {
     log(`refresh error: ${e.message}`);
+  } finally {
+    refreshInFlight = false;
   }
 }
 

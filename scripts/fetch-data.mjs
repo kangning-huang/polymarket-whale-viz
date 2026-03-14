@@ -26,6 +26,8 @@ const config = JSON.parse(readFileSync(join(__dirname, 'traders.json'), 'utf-8')
 const { traders, coins, refTs, windowSec, lookbackHours } = config;
 const windowDurations = config.windowDurations || [windowSec];
 const DURATION_LABELS = { 900: '15m', 300: '5m', 3600: '1h' };
+const COVERAGE_THRESHOLD = 0.9;
+const CANONICAL_VPS_PRICES_PATH = '/opt/polymarket/data/raw/prices/';
 
 const DELAY_MS = 100;
 const REQUEST_TIMEOUT = 8000;
@@ -34,7 +36,7 @@ const MAX_RETRIES = 3;
 // VPS config from environment
 const VPS_SSH_KEY = process.env.VPS_SSH_KEY_PATH || '';
 const VPS_HOST = process.env.VPS_HOST || '';
-const VPS_PRICES_PATH = process.env.VPS_PRICES_PATH || '/opt/polymarket/data/raw/prices/';
+const VPS_PRICES_PATH = process.env.VPS_PRICES_PATH || CANONICAL_VPS_PRICES_PATH;
 
 // ── Helpers ──
 
@@ -78,6 +80,28 @@ function windowForTs(ts, dur = windowSec) {
   return Math.floor((ts - refTs) / dur) * dur + refTs;
 }
 
+function expectedWindowCount(dur) {
+  return Math.floor((lookbackHours * 3600) / dur);
+}
+
+function minCoveragePoints(duration) {
+  return Math.ceil(duration * COVERAGE_THRESHOLD);
+}
+
+function getCoverageStats(prices, duration) {
+  const coveredSeconds = new Set(
+    (prices || [])
+      .map(p => p?.sec)
+      .filter(sec => Number.isInteger(sec) && sec >= 0 && sec < duration)
+  ).size;
+
+  return {
+    coveredSeconds,
+    requiredSeconds: minCoveragePoints(duration),
+    coverageRatio: duration > 0 ? coveredSeconds / duration : 0,
+  };
+}
+
 // For 5m/15m markets: timestamp-based slug
 // For 1h markets: need to look up from series (handled separately)
 function eventSlug(coin, windowTs, dur = 900) {
@@ -111,13 +135,13 @@ function downloadPriceFiles() {
   try {
     execSync(
       `rsync -avz --ignore-existing -e "ssh -i ${VPS_SSH_KEY} -o StrictHostKeyChecking=no" ` +
-      `ubuntu@${VPS_HOST}:${VPS_PRICES_PATH} ${PRICES_DIR}/`,
+      `root@${VPS_HOST}:${VPS_PRICES_PATH} ${PRICES_DIR}/`,
       { stdio: 'pipe', timeout: 60000 }
     );
     const files = readdirSync(PRICES_DIR).filter(f => f.startsWith('price_'));
     console.log(`  Downloaded/cached ${files.length} price files`);
   } catch (e) {
-    console.warn(`  VPS sync failed: ${e.message}. Continuing with API fallback.`);
+    console.warn(`  VPS sync failed: ${e.message}. Continuing without fresh VPS sync.`);
   }
 }
 
@@ -137,15 +161,13 @@ function loadVpsPrices(windowTs, coin, duration = 900) {
 
   try {
     const lines = readFileSync(filepath, 'utf-8').trim().split('\n');
-    if (lines.length < 10) return null; // too sparse
-
-    const points = [];
+    const pointsBySec = new Map();
     for (const line of lines) {
       if (!line) continue;
       const row = JSON.parse(line);
 
       // Filter by window duration - only include prices within the window
-      if (row.sec >= duration) continue;
+      if (!Number.isInteger(row.sec) || row.sec < 0 || row.sec >= duration) continue;
 
       const uB = row.uB;
       const uA = row.uA;
@@ -160,7 +182,7 @@ function loadVpsPrices(windowTs, coin, duration = 900) {
 
       if (mid == null) continue;
 
-      points.push({
+      pointsBySec.set(row.sec, {
         t: windowTs + row.sec,
         sec: row.sec,
         p: Math.round(mid * 1000) / 1000,
@@ -172,8 +194,20 @@ function loadVpsPrices(windowTs, coin, duration = 900) {
       });
     }
 
-    return points.length >= 10 ? points : null;
-  } catch {
+    const points = Array.from(pointsBySec.values()).sort((a, b) => a.sec - b.sec);
+    const coverage = getCoverageStats(points, duration);
+
+    if (coverage.coveredSeconds < coverage.requiredSeconds) {
+      console.warn(
+        `  ⚠️  VPS data too sparse after parsing: ${coverage.coveredSeconds}/${duration} seconds ` +
+        `(${Math.round(coverage.coverageRatio * 100)}%, need ${coverage.requiredSeconds})`
+      );
+      return null;
+    }
+
+    return points;
+  } catch (err) {
+    console.warn(`  ⚠️  Failed to parse VPS data: ${err.message}`);
     return null;
   }
 }
@@ -182,12 +216,12 @@ function loadVpsPrices(windowTs, coin, duration = 900) {
 
 function getTargetWindows() {
   const now = Math.floor(Date.now() / 1000);
-  const cutoff = now - lookbackHours * 3600;
   const windows = [];
 
   for (const dur of windowDurations) {
     let wts = windowForTs(now, dur) - dur;
-    while (wts >= cutoff) {
+    const count = expectedWindowCount(dur);
+    for (let i = 0; i < count; i++) {
       windows.push({ ts: wts, duration: dur });
       wts -= dur;
     }
@@ -513,17 +547,17 @@ async function main() {
         try {
           const cached = JSON.parse(readFileSync(cacheFile, 'utf-8'));
           const priceCount = cached.prices?.length ?? 0;
-          const maxSec = cached.prices?.length > 0 ? Math.max(...cached.prices.map(p => p.sec)) : 0;
-          const timeCoverage = maxSec / dur;
-          const minTimeCoverage = 0.8;
+          const coverage = getCoverageStats(cached.prices || [], dur);
 
           // REQUIRE per-second VPS data - reject cached API data
-          const minPricePoints = Math.floor(dur * 0.5);
-          const hasPerSecondData = priceCount >= minPricePoints && timeCoverage >= minTimeCoverage;
+          const hasPerSecondData = coverage.coveredSeconds >= coverage.requiredSeconds;
 
           // Delete cache if it doesn't have per-second data
           if (!hasPerSecondData) {
-            console.log(`  Removing cache ${cacheFile.split('/').pop()} (${priceCount} pts < ${minPricePoints} required)`);
+            console.log(
+              `  Removing cache ${cacheFile.split('/').pop()} ` +
+              `(${coverage.coveredSeconds}/${dur}s covered, need ${coverage.requiredSeconds})`
+            );
             try { unlinkSync(cacheFile); } catch { /* ignore */ }
             // Continue to re-fetch this window
           } else {
@@ -601,30 +635,19 @@ async function main() {
         continue;
       }
 
-      // Try VPS per-second prices first (best quality)
-      let prices = loadVpsPrices(wts, coin, dur);
-      if (prices) {
-        vpsPriceWindows++;
-      } else {
-        // Fallback: fetch from CLOB API (1s fidelity)
-        const upTokenId = marketInfo.clobTokenIds[0];
-        if (upTokenId) {
-          const history = await fetchPriceHistory(upTokenId, wts, wts + dur);
-          if (history && history.length >= 3) {
-            prices = history.map(pt => ({
-              t: pt.t,
-              sec: pt.t - wts,
-              p: Math.round(pt.p * 1000) / 1000,
-            }));
-            console.log(`  ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — using API prices (${prices.length} pts)`);
-          }
-        }
-      }
+      // CRITICAL: Only accept VPS per-second prices (NO API FALLBACK)
+      const prices = loadVpsPrices(wts, coin, dur);
       if (!prices) {
-        console.log(`  Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — no price data`);
+        console.log(
+          `  ❌ Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} ` +
+          `— no VPS recorder data (required ${Math.round(COVERAGE_THRESHOLD * 100)}% coverage)`
+        );
         windowsSkipped++;
         continue;
       }
+
+      vpsPriceWindows++;
+      console.log(`  ✅ ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — VPS data (${prices.length} pts)`);
 
       // Process trades for each trader (only traders who trade this duration)
       const tradersData = {};
@@ -650,14 +673,14 @@ async function main() {
       }
 
       // REQUIRE per-second VPS data - no API fallback allowed
-      // Per-second data has ~1 point per second, API data has ~1 point per minute
-      const minPricePoints = Math.floor(dur * 0.5); // At least 50% of seconds must have data
-      const maxSec = Math.max(...prices.map(p => p.sec));
-      const timeCoverage = maxSec / dur;
-      const minTimeCoverage = 0.8;
+      const coverage = getCoverageStats(prices, dur);
 
-      if (prices.length < minPricePoints || timeCoverage < minTimeCoverage) {
-        console.log(`  Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} — insufficient VPS data (${prices.length} pts, need ${minPricePoints}; coverage ${Math.round(timeCoverage * 100)}%)`);
+      if (coverage.coveredSeconds < coverage.requiredSeconds) {
+        console.log(
+          `  Skip ${coin.toUpperCase()} ${durLabel} ${new Date(wts * 1000).toISOString().slice(11, 16)} ` +
+          `— insufficient VPS data (${coverage.coveredSeconds}/${dur}s covered, ` +
+          `need ${coverage.requiredSeconds}; coverage ${Math.round(coverage.coverageRatio * 100)}%)`
+        );
         windowsSkipped++;
         continue;
       }

@@ -15,28 +15,42 @@ const path = require('path');
 const https = require('https');
 
 // Configuration
-const DATA_DIR = '/opt/polymarket/data/raw/prices';
-const TRADE_POLL_INTERVAL = 700; // 0.7s for sub-second trade detection
+const DATA_DIR = process.env.VPS_PRICES_PATH || '/opt/polymarket/data/raw/prices';
+const TRADE_POLL_INTERVAL = Number(process.env.TRADE_POLL_INTERVAL || 5000);
 const PRICE_PUBLISH_INTERVAL = 1000; // Publish aggregated prices every 1s
 const CLEANUP_INTERVAL = 60000; // Clean old data every 60s
-const ROLLING_WINDOW_SEC = 900; // 15 minutes
 
 // Supported markets
-const MARKETS = ['btc', 'eth', 'sol'];
+const MARKETS = ['btc', 'eth', 'sol', 'xrp'];
 const DURATIONS = [300, 900, 3600]; // 5m, 15m, 1h
 
 // In-memory state (shared with Express via module.exports)
 const liveState = {
   prices: {}, // { coin: { duration: [{ sec, p, bid, ask, cex, ts }] } }
-  trades: {}, // { coin: { botName: [{ trade objects }] } }
+  trades: {}, // { coin: { duration: { botName: [{ trade objects }] } } }
   lastUpdate: {}, // { coin_duration: timestamp }
   connections: 0, // Active SSE connections
 };
 
+// Track current window timestamps to detect window boundaries
+const currentWindowTs = {}; // { coin_duration: windowTimestamp }
+const priceFileState = new Map(); // { coin_duration -> { filePath, position, partialLine, windowTs } }
+const tradeState = new Map(); // { botAddress_coin_duration -> latestTs }
+let pricesUpdateInFlight = false;
+let tradesUpdateInFlight = false;
+let lastPriceScanTs = 0;
+
 // Trader configuration (load from traders.json)
 let traders = [];
 try {
-  const tradersPath = path.join(__dirname, '../scripts/traders.json');
+  const candidatePaths = [
+    path.join(__dirname, '../scripts/traders.json'),
+    path.join(__dirname, './scripts/traders.json'),
+  ];
+  const tradersPath = candidatePaths.find(fs.existsSync);
+  if (!tradersPath) {
+    throw new Error(`traders.json not found in: ${candidatePaths.join(', ')}`);
+  }
   const config = JSON.parse(fs.readFileSync(tradersPath, 'utf8'));
   traders = config.traders || [];
   console.log(`[Aggregator] Loaded ${traders.length} traders`);
@@ -47,6 +61,13 @@ try {
 
 // Track last seen trade hashes to avoid duplicates
 const seenTrades = new Map(); // { address_txHash: timestamp }
+const recentStats = {
+  priceAppends: 0,
+  tradePolls: 0,
+  newTrades: 0,
+  skippedPriceOverlaps: 0,
+  skippedTradeOverlaps: 0,
+};
 
 /**
  * Convert duration in seconds to string format used in filenames
@@ -61,7 +82,7 @@ function durationToString(duration) {
 /**
  * Read latest price file for a market window
  */
-function readLatestPriceFile(coin, duration) {
+function getLatestPriceFilename(coin, duration) {
   try {
     const durationStr = durationToString(duration);
     const files = fs.readdirSync(DATA_DIR)
@@ -70,54 +91,154 @@ function readLatestPriceFile(coin, duration) {
       .reverse();
 
     if (files.length === 0) {
-      console.log(`[Aggregator] No price files found for ${coin}_${durationStr}`);
       return null;
     }
-
-    const filePath = path.join(DATA_DIR, files[0]);
-    const content = fs.readFileSync(filePath, 'utf8');
-
-    // Parse JSONL format and transform to expected structure
-    const lines = content.trim().split('\n').filter(Boolean);
-
-    // Extract window timestamp from filename: price_<ts>_<coin>_<duration>.jsonl
-    const match = files[0].match(/price_(\d+)_/);
-    const windowTs = match ? parseInt(match[1], 10) : Math.floor(Date.now() / 1000);
-
-    return lines.map(line => {
-      const raw = JSON.parse(line);
-      // Transform recorder format {sec, uB, uA, dB, dA, cex} to aggregator format
-      // {t, sec, p, bid, ask, dnBid, dnAsk, cex}
-      // For live display, we show the "Up" side by default
-      return {
-        t: windowTs + raw.sec,  // Absolute Unix timestamp
-        sec: raw.sec,           // Seconds within window
-        p: raw.uB || 0.5,      // Use Up bid as default price
-        bid: raw.uB || null,   // Up bid
-        ask: raw.uA || null,   // Up ask
-        dnBid: raw.dB || null, // Down bid
-        dnAsk: raw.dA || null, // Down ask
-        cex: raw.cex || null,  // CEX price
-      };
-    });
+    return files[0];
   } catch (err) {
-    console.error(`[Aggregator] Error reading price file for ${coin}_${duration}:`, err.message);
+    console.error(`[Aggregator] Error listing price files for ${coin}_${duration}:`, err.message);
     return null;
+  }
+}
+
+function parseWindowTsFromFilename(filename) {
+  const match = filename && filename.match(/price_(\d+)_/);
+  return match ? parseInt(match[1], 10) : Math.floor(Date.now() / 1000);
+}
+
+function transformPriceRow(raw, windowTs) {
+  return {
+    t: windowTs + raw.sec,
+    sec: raw.sec,
+    p: raw.uB || 0.5,
+    bid: raw.uB || null,
+    ask: raw.uA || null,
+    dnBid: raw.dB || null,
+    dnAsk: raw.dA || null,
+    cex: raw.cex || null,
+  };
+}
+
+function appendPriceRows(coin, duration, rows, windowTs) {
+  if (!rows.length) return 0;
+
+  if (!liveState.prices[coin]) liveState.prices[coin] = {};
+  if (!liveState.prices[coin][duration]) liveState.prices[coin][duration] = [];
+  if (!liveState.trades[coin]) liveState.trades[coin] = {};
+  if (!liveState.trades[coin][duration]) liveState.trades[coin][duration] = {};
+
+  const windowKey = `${coin}_${duration}`;
+  const previousWindowTs = currentWindowTs[windowKey];
+
+  if (windowTs && previousWindowTs && windowTs !== previousWindowTs) {
+    liveState.prices[coin][duration] = [];
+    for (const botName in liveState.trades[coin][duration]) {
+      liveState.trades[coin][duration][botName] = liveState.trades[coin][duration][botName].filter(
+        trade => trade.ts >= windowTs
+      );
+    }
+  }
+
+  currentWindowTs[windowKey] = windowTs;
+
+  const activeWindowTs = windowTs || previousWindowTs;
+  const existing = liveState.prices[coin][duration].filter(p =>
+    activeWindowTs == null || (p.t >= activeWindowTs && p.t < activeWindowTs + duration)
+  );
+  const dedupedRows = [];
+  const seenSecs = new Set(existing.map(p => p.sec));
+
+  for (const row of rows) {
+    if (!Number.isInteger(row.sec) || row.sec < 0 || row.sec >= duration) continue;
+    if (seenSecs.has(row.sec)) continue;
+    seenSecs.add(row.sec);
+    dedupedRows.push(transformPriceRow(row, windowTs));
+  }
+
+  if (!dedupedRows.length) {
+    liveState.prices[coin][duration] = existing;
+    liveState.lastUpdate[windowKey] = Date.now();
+    return 0;
+  }
+
+  liveState.prices[coin][duration] = existing
+    .concat(dedupedRows)
+    .sort((a, b) => a.t - b.t);
+  liveState.lastUpdate[windowKey] = Date.now();
+
+  return dedupedRows.length;
+}
+
+function readIncrementalPriceRows(coin, duration) {
+  const durationStr = durationToString(duration);
+  const latestFile = getLatestPriceFilename(coin, duration);
+  if (!latestFile) return 0;
+
+  const filePath = path.join(DATA_DIR, latestFile);
+  const windowTs = parseWindowTsFromFilename(latestFile);
+  const stateKey = `${coin}_${duration}`;
+  let state = priceFileState.get(stateKey);
+
+  if (!state || state.filePath !== filePath) {
+    state = { filePath, position: 0, partialLine: '', windowTs };
+    priceFileState.set(stateKey, state);
+  }
+
+  try {
+    const stat = fs.statSync(filePath);
+    if (stat.size < state.position) {
+      state.position = 0;
+      state.partialLine = '';
+    }
+
+    if (stat.size === state.position) {
+      return 0;
+    }
+
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      const length = stat.size - state.position;
+      const buffer = Buffer.alloc(length);
+      fs.readSync(fd, buffer, 0, length, state.position);
+      state.position = stat.size;
+
+      const chunk = state.partialLine + buffer.toString('utf8');
+      const lines = chunk.split('\n');
+      state.partialLine = lines.pop() || '';
+
+      const rows = [];
+      for (const line of lines) {
+        if (!line) continue;
+        try {
+          rows.push(JSON.parse(line));
+        } catch (err) {
+          console.error(`[Aggregator] Failed to parse price row for ${coin}_${durationStr}:`, err.message);
+        }
+      }
+
+      state.windowTs = windowTs;
+      return appendPriceRows(coin, duration, rows, windowTs);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch (err) {
+    console.error(`[Aggregator] Error reading incremental price file for ${coin}_${duration}:`, err.message);
+    return 0;
   }
 }
 
 /**
  * Fetch recent trades for a trader from Polymarket Data API
+ * Fetches ALL recent trades and filters by eventSlug (matching main pipeline logic)
  */
-function fetchTraderActivity(address, coin, duration) {
+function fetchTraderActivity(address, coin, duration, sinceTs, windowTs) {
   return new Promise((resolve, reject) => {
-    const tokenId = getTokenId(coin, duration);
-    if (!tokenId) {
+    if (!windowTs) {
       resolve([]);
       return;
     }
 
-    const url = `https://data-api.polymarket.com/activity?user=${address}&asset_id=${tokenId}&limit=20`;
+    // Fetch all recent trades (no asset_id filter - we filter by eventSlug instead)
+    const url = `https://data-api.polymarket.com/activity?user=${address}&limit=100`;
 
     https.get(url, (res) => {
       let data = '';
@@ -125,7 +246,28 @@ function fetchTraderActivity(address, coin, duration) {
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          resolve(Array.isArray(parsed) ? parsed : []);
+          if (!Array.isArray(parsed)) {
+            resolve([]);
+            return;
+          }
+
+          // Filter by eventSlug prefix (matches main pipeline logic)
+          const slugPrefix = getEventSlugPrefix(coin, duration);
+          const exactSlug = duration === 3600 ? null : `${coin}-updown-${durationToString(duration)}-${windowTs}`;
+          const filtered = parsed.filter(t => {
+            const rawTimestamp = t.timestamp || 0;
+            const timestampSeconds = rawTimestamp > 2000000000 ? Math.floor(rawTimestamp / 1000) : rawTimestamp;
+            return (
+              t.type === 'TRADE' &&
+              t.eventSlug &&
+              (duration === 3600 ? t.eventSlug.startsWith(slugPrefix) : t.eventSlug === exactSlug) &&
+              timestampSeconds >= windowTs &&
+              timestampSeconds < windowTs + duration &&
+              (!sinceTs || timestampSeconds > sinceTs)
+            );
+          });
+
+          resolve(filtered);
         } catch (err) {
           console.error(`[Aggregator] Failed to parse API response:`, err.message);
           resolve([]);
@@ -139,52 +281,82 @@ function fetchTraderActivity(address, coin, duration) {
 }
 
 /**
- * Get token ID for coin + duration combination
- * These map to specific Polymarket conditional tokens
+ * Get event slug prefix for filtering trades
+ * Matches main pipeline logic in fetch-data.mjs
  */
-function getTokenId(coin, duration) {
-  // This mapping would come from your existing market configuration
-  // Placeholder - replace with actual token IDs from your system
-  const tokenMap = {
-    'btc_300': '71321045679252212594626385532706912750332728571942532289631379312455583992833',
-    'btc_900': '71321045679252212594626385532706912750332728571942532289631379312455583992833',
-    'btc_3600': '71321045679252212594626385532706912750332728571942532289631379312455583992833',
-    // Add other coins/durations as needed
-  };
-  return tokenMap[`${coin}_${duration}`];
+function getEventSlugPrefix(coin, duration) {
+  // For 5m and 15m markets: slug format is {coin}-updown-{duration}-
+  // For 1h markets: slug format varies by coin (btc-up-or-down-hourly, etc.)
+  const durLabel = durationToString(duration);
+
+  if (duration === 3600) {
+    // Hourly markets use different slug patterns
+    // We'll match by prefix only to catch all hourly windows
+    const hourlyPrefixes = {
+      'btc': 'btc-up-or-down-hourly',
+      'eth': 'eth-up-or-down-hourly',
+      'sol': 'sol-up-or-down-hourly',
+      'xrp': 'xrp-up-or-down-hourly',
+    };
+    return hourlyPrefixes[coin] || `${coin}-up-or-down-hourly`;
+  }
+
+  // For 5m/15m markets: prefix is {coin}-updown-{duration}-
+  return `${coin}-updown-${durLabel}-`;
 }
 
 /**
  * Process and deduplicate incoming trades
+ * Uses transaction hash as unique identifier (not trade ID which can vary)
  */
-function processTrades(rawTrades, botAddress, botName, coin) {
+function processTrades(rawTrades, botAddress, botName, coin, duration, windowTs) {
   const now = Date.now();
   const newTrades = [];
+  let latestTs = tradeState.get(`${botAddress}_${coin}_${duration}`) || 0;
 
   for (const trade of rawTrades) {
-    const tradeKey = `${botAddress}_${trade.id || trade.transaction_hash}`;
+    // Use transaction hash as the unique key (more reliable than trade.id)
+    const txHash = trade.transactionHash || trade.transaction_hash;
+    if (!txHash) continue; // Skip trades without hash
 
-    // Skip if we've seen this trade recently (within 5 minutes)
+    const tradeKey = `${botAddress}_${txHash}`;
+
+    // Skip if we've seen this exact transaction before
     if (seenTrades.has(tradeKey)) {
-      const seenAt = seenTrades.get(tradeKey);
-      if (now - seenAt < 300000) continue; // 5 min dedup window
+      continue; // Already processed - dedup is permanent (no time window)
     }
 
     // Mark as seen
     seenTrades.set(tradeKey, now);
 
+    // Parse numeric values
+    const usdc = parseFloat(trade.usdcSize || trade.notional_amount || trade.size || 0);
+    const price = parseFloat(trade.price || 0);
+
+    // Calculate tokens: tokens = usdc / price (if price is valid)
+    const tokens = price > 0 ? usdc / price : 0;
+
     // Format trade for frontend
+    // CRITICAL: API timestamp might be in milliseconds or seconds - normalize to seconds
+    const rawTimestamp = trade.timestamp || Math.floor(Date.now() / 1000);
+    const timestampSeconds = rawTimestamp > 2000000000 ? Math.floor(rawTimestamp / 1000) : rawTimestamp;
+
     newTrades.push({
-      ts: trade.timestamp || Math.floor(Date.now() / 1000),
+      ts: timestampSeconds,
+      sec: Math.max(0, timestampSeconds - windowTs),
       side: trade.side?.toUpperCase() || 'BUY',
       outcome: trade.outcome || 'Up',
-      usdc: parseFloat(trade.notional_amount || trade.size || 0),
-      price: parseFloat(trade.price || 0),
-      txHash: trade.transaction_hash,
+      tokens: tokens,
+      usdc: usdc,
+      price: price,
+      txHash: txHash,
       botName,
     });
+
+    if (timestampSeconds > latestTs) latestTs = timestampSeconds;
   }
 
+  tradeState.set(`${botAddress}_${coin}_${duration}`, latestTs);
   return newTrades;
 }
 
@@ -192,22 +364,21 @@ function processTrades(rawTrades, botAddress, botName, coin) {
  * Update price data from VPS recorder files
  */
 async function updatePrices() {
-  for (const coin of MARKETS) {
-    for (const duration of DURATIONS) {
-      const priceData = readLatestPriceFile(coin, duration);
-      if (!priceData || priceData.length === 0) continue;
+  if (pricesUpdateInFlight) {
+    recentStats.skippedPriceOverlaps += 1;
+    return;
+  }
 
-      // Initialize nested structure
-      if (!liveState.prices[coin]) liveState.prices[coin] = {};
-      if (!liveState.prices[coin][duration]) liveState.prices[coin][duration] = [];
-
-      // Keep only last 15 minutes of data
-      const cutoffTime = Math.floor(Date.now() / 1000) - ROLLING_WINDOW_SEC;
-      const filtered = priceData.filter(p => p.t >= cutoffTime);
-
-      liveState.prices[coin][duration] = filtered;
-      liveState.lastUpdate[`${coin}_${duration}`] = Date.now();
+  pricesUpdateInFlight = true;
+  try {
+    for (const coin of MARKETS) {
+      for (const duration of DURATIONS) {
+        recentStats.priceAppends += readIncrementalPriceRows(coin, duration);
+      }
     }
+    lastPriceScanTs = Date.now();
+  } finally {
+    pricesUpdateInFlight = false;
   }
 }
 
@@ -215,36 +386,50 @@ async function updatePrices() {
  * Poll for new trades from all configured bots
  */
 async function updateTrades() {
-  for (const coin of MARKETS) {
-    for (const duration of DURATIONS) {
-      // Get bots that trade this duration
-      const relevantBots = traders.filter(t =>
-        t.durations && t.durations.includes(duration)
-      );
+  if (tradesUpdateInFlight) {
+    recentStats.skippedTradeOverlaps += 1;
+    return;
+  }
 
-      for (const bot of relevantBots) {
-        try {
-          const rawTrades = await fetchTraderActivity(bot.address, coin, duration);
-          const newTrades = processTrades(rawTrades, bot.address, bot.name, coin);
+  tradesUpdateInFlight = true;
+  try {
+    for (const coin of MARKETS) {
+      for (const duration of DURATIONS) {
+        const windowTs = currentWindowTs[`${coin}_${duration}`];
+        if (!windowTs) continue;
 
-          if (newTrades.length > 0) {
-            // Initialize nested structure
-            if (!liveState.trades[coin]) liveState.trades[coin] = {};
-            if (!liveState.trades[coin][bot.name]) liveState.trades[coin][bot.name] = [];
+        const relevantBots = traders.filter(t =>
+          t.durations && t.durations.includes(duration)
+        );
 
-            // Add new trades and keep last 100
-            liveState.trades[coin][bot.name].push(...newTrades);
-            liveState.trades[coin][bot.name] = liveState.trades[coin][bot.name]
-              .sort((a, b) => b.ts - a.ts)
-              .slice(0, 100);
+        for (const bot of relevantBots) {
+          try {
+            const stateKey = `${bot.address}_${coin}_${duration}`;
+            const sinceTs = tradeState.get(stateKey) || 0;
+            recentStats.tradePolls += 1;
+            const rawTrades = await fetchTraderActivity(bot.address, coin, duration, sinceTs, windowTs);
+            const newTrades = processTrades(rawTrades, bot.address, bot.name, coin, duration, windowTs);
 
-            console.log(`[Aggregator] ${bot.name}: ${newTrades.length} new trades for ${coin}_${duration}`);
+            if (newTrades.length > 0) {
+              if (!liveState.trades[coin]) liveState.trades[coin] = {};
+              if (!liveState.trades[coin][duration]) liveState.trades[coin][duration] = {};
+              if (!liveState.trades[coin][duration][bot.name]) liveState.trades[coin][duration][bot.name] = [];
+
+              liveState.trades[coin][duration][bot.name].push(...newTrades);
+              liveState.trades[coin][duration][bot.name] = liveState.trades[coin][duration][bot.name]
+                .sort((a, b) => b.ts - a.ts)
+                .slice(0, 100);
+
+              recentStats.newTrades += newTrades.length;
+            }
+          } catch (err) {
+            console.error(`[Aggregator] Error fetching trades for ${bot.name}:`, err.message);
           }
-        } catch (err) {
-          console.error(`[Aggregator] Error fetching trades for ${bot.name}:`, err.message);
         }
       }
     }
+  } finally {
+    tradesUpdateInFlight = false;
   }
 }
 
@@ -254,14 +439,24 @@ async function updateTrades() {
 function cleanup() {
   const now = Date.now();
 
-  // Clean old seen trades (older than 5 minutes)
+  // Clean old seen trades (older than 1 hour - keep cache small but persistent)
   for (const [key, ts] of seenTrades.entries()) {
-    if (now - ts > 300000) {
+    if (now - ts > 3600000) { // 1 hour
       seenTrades.delete(key);
     }
   }
 
-  console.log(`[Aggregator] Cleanup: ${seenTrades.size} trades in dedup cache`);
+  console.log(
+    `[Aggregator] Cleanup: dedup=${seenTrades.size} priceAppends=${recentStats.priceAppends} ` +
+    `tradePolls=${recentStats.tradePolls} newTrades=${recentStats.newTrades} ` +
+    `skippedPriceOverlaps=${recentStats.skippedPriceOverlaps} skippedTradeOverlaps=${recentStats.skippedTradeOverlaps} ` +
+    `lastPriceScanMsAgo=${lastPriceScanTs ? now - lastPriceScanTs : 'n/a'}`
+  );
+  recentStats.priceAppends = 0;
+  recentStats.tradePolls = 0;
+  recentStats.newTrades = 0;
+  recentStats.skippedPriceOverlaps = 0;
+  recentStats.skippedTradeOverlaps = 0;
 }
 
 /**
@@ -271,6 +466,7 @@ async function main() {
   console.log('[Aggregator] Starting live data aggregator...');
   console.log(`[Aggregator] Markets: ${MARKETS.join(', ')}`);
   console.log(`[Aggregator] Durations: ${DURATIONS.join(', ')}s`);
+  console.log(`[Aggregator] Trade poll interval: ${TRADE_POLL_INTERVAL}ms`);
 
   // Initial data load
   await updatePrices();

@@ -17,6 +17,12 @@ interface Props {
 export default function TimelineRibbon({ windows, selectedSlot, onSelect }: Props) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
+  const durationLabel = (duration: number) => {
+    if (duration === 300) return '5m';
+    if (duration === 3600) return '1h';
+    return '15m';
+  };
+
   // Group by timestamp for display
   const grouped = useMemo(() => {
     const map = new Map<string, WindowSlot[]>();
@@ -53,7 +59,7 @@ export default function TimelineRibbon({ windows, selectedSlot, onSelect }: Prop
         <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-hide fade-horizontal">
           {grouped.map(([key, slots], index) => {
             const totalPnl = slots.reduce((sum, s) => sum + s.pnl, 0);
-            const isSelected = selectedSlot.startsWith(key.split('_')[0]);
+            const isSelected = selectedSlot === key;
             const isHovered = hoveredIndex === index;
             const ts = Number(key.split('_')[0]);
             const duration = Number(key.split('_')[1]);
@@ -72,7 +78,7 @@ export default function TimelineRibbon({ windows, selectedSlot, onSelect }: Prop
                   }
                 `}
                 style={{
-                  width: duration <= 300 ? 60 : 80,
+                  width: duration === 300 ? 60 : duration === 3600 ? 96 : 80,
                 }}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -100,9 +106,9 @@ export default function TimelineRibbon({ windows, selectedSlot, onSelect }: Prop
                 />
 
                 {/* Duration badge */}
-                {duration <= 300 && (
+                {duration !== 900 && (
                   <div className="absolute -top-1 -right-1 bg-purple text-white text-xxs px-1 rounded font-mono">
-                    5m
+                    {durationLabel(duration)}
                   </div>
                 )}
 
@@ -152,7 +158,7 @@ export default function TimelineRibbon({ windows, selectedSlot, onSelect }: Prop
                           {formatDate(ts)}
                         </span>
                         <span className="text-xs px-1.5 py-0.5 rounded bg-surface text-text-secondary font-mono">
-                          {duration <= 300 ? '5m' : '15m'}
+                          {durationLabel(duration)}
                         </span>
                       </div>
                       <div className="flex items-center gap-3">

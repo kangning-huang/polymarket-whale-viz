@@ -17,7 +17,7 @@ interface Props {
 }
 
 export default function BotPage({ bot, manifest }: Props) {
-  const DURATION_LABELS: Record<number, string> = { 900: '15m', 300: '5m' };
+  const DURATION_LABELS: Record<number, string> = { 300: '5m', 900: '15m', 3600: '1h' };
 
   // Derive unique window slots (ts + duration) containing this bot
   // Backend already filters for adequate price data coverage

@@ -20,6 +20,7 @@ const require = createRequire(import.meta.url);
 const PORT = process.env.PORT || 3001;
 const HEARTBEAT_INTERVAL = 30000; // 30s keepalive
 const MAX_CONNECTIONS = 500;
+const BROADCAST_INTERVAL = 1000;
 
 const app = express();
 
@@ -80,10 +81,14 @@ app.get('/health', (req, res) => {
  */
 app.get('/api/live/:coin/:botName', (req, res) => {
   const { coin, botName } = req.params;
+  const duration = Number(req.query.duration || 900);
 
   // Validate parameters
-  if (!['btc', 'eth', 'sol'].includes(coin)) {
-    return res.status(400).json({ error: 'Invalid coin. Must be btc, eth, or sol' });
+  if (!['btc', 'eth', 'sol', 'xrp'].includes(coin)) {
+    return res.status(400).json({ error: 'Invalid coin. Must be btc, eth, sol, or xrp' });
+  }
+  if (![300, 900, 3600].includes(duration)) {
+    return res.status(400).json({ error: 'Invalid duration. Must be 300, 900, or 3600' });
   }
 
   // Check connection limit
@@ -106,8 +111,10 @@ app.get('/api/live/:coin/:botName', (req, res) => {
     id: connectionId,
     coin,
     botName,
+    duration,
     res,
     startTime: Date.now(),
+    lastTradeTs: 0,
   };
 
   connections.set(connectionId, client);
@@ -119,34 +126,15 @@ app.get('/api/live/:coin/:botName', (req, res) => {
     connectionId,
     coin,
     botName,
+    duration,
     timestamp: Date.now(),
   })}\n\n`);
 
   // Send initial state snapshot
   sendInitialState(client);
 
-  // Set up heartbeat
-  const heartbeat = setInterval(() => {
-    if (res.writableEnded) {
-      clearInterval(heartbeat);
-      return;
-    }
-    res.write(`: keepalive\n\n`);
-  }, HEARTBEAT_INTERVAL);
-
-  // Set up data broadcast (every 1s)
-  const broadcast = setInterval(() => {
-    if (res.writableEnded) {
-      clearInterval(broadcast);
-      return;
-    }
-    sendUpdates(client);
-  }, 1000);
-
   // Cleanup on disconnect
   req.on('close', () => {
-    clearInterval(heartbeat);
-    clearInterval(broadcast);
     connections.delete(connectionId);
     console.log(`[SSE] Client ${connectionId} disconnected. Total: ${connections.size}`);
   });
@@ -156,29 +144,34 @@ app.get('/api/live/:coin/:botName', (req, res) => {
  * Send initial state snapshot to new client
  */
 function sendInitialState(client) {
-  const { coin, botName, res } = client;
+  const { coin, botName, duration, res } = client;
 
   try {
-    // Send last 15 minutes of price data (900s window)
-    const durations = [900]; // Default to 15m
-    for (const duration of durations) {
-      const prices = liveState.prices[coin]?.[duration] || [];
-      if (prices.length > 0) {
-        res.write(`data: ${JSON.stringify({
-          type: 'initial_prices',
-          duration,
-          data: prices,
-        })}\n\n`);
-      }
+    const prices = liveState.prices[coin]?.[duration] || [];
+    if (prices.length > 0) {
+      res.write(`data: ${JSON.stringify({
+        type: 'initial_prices',
+        duration,
+        data: prices,
+      })}\n\n`);
+    } else {
+      res.write(`data: ${JSON.stringify({
+        type: 'error',
+        message: 'NO_VPS_DATA',
+        detail: `No live price data available for ${coin} ${duration}`,
+      })}\n\n`);
     }
 
     // Send recent trades for this bot
-    const trades = liveState.trades[coin]?.[botName] || [];
+    const trades = liveState.trades[coin]?.[duration]?.[botName] || [];
     if (trades.length > 0) {
+      const initialTrades = trades.slice(0, 20);
       res.write(`data: ${JSON.stringify({
         type: 'initial_trades',
-        data: trades.slice(0, 20), // Last 20 trades
+        duration,
+        data: initialTrades, // Last 20 trades
       })}\n\n`);
+      client.lastTradeTs = initialTrades.reduce((maxTs, trade) => Math.max(maxTs, trade.ts || 0), client.lastTradeTs);
     }
   } catch (err) {
     console.error(`[SSE] Error sending initial state:`, err.message);
@@ -189,37 +182,60 @@ function sendInitialState(client) {
  * Send incremental updates to client
  */
 function sendUpdates(client) {
-  const { coin, botName, res } = client;
+  const { coin, botName, duration, res } = client;
 
   try {
+    if (res.writableEnded) return;
+
     // Send latest price point
-    const duration = 900; // 15m default
     const prices = liveState.prices[coin]?.[duration] || [];
     if (prices.length > 0) {
       const latestPrice = prices[prices.length - 1];
       res.write(`data: ${JSON.stringify({
         type: 'price',
+        duration,
         data: latestPrice,
         timestamp: Date.now(),
       })}\n\n`);
     }
 
-    // Send new trades (if any appeared in last 2 seconds)
-    const trades = liveState.trades[coin]?.[botName] || [];
-    const recentTrades = trades.filter(t => {
-      const tradeAge = Date.now() / 1000 - t.ts;
-      return tradeAge < 2; // Trades from last 2 seconds
-    });
+    // Send trades that this client has not received yet
+    const trades = liveState.trades[coin]?.[duration]?.[botName] || [];
+    const recentTrades = trades
+      .filter(t => t.ts > client.lastTradeTs)
+      .sort((a, b) => a.ts - b.ts);
 
     for (const trade of recentTrades) {
       res.write(`data: ${JSON.stringify({
         type: 'trade',
+        duration,
         data: trade,
         timestamp: Date.now(),
       })}\n\n`);
+      client.lastTradeTs = Math.max(client.lastTradeTs, trade.ts);
     }
   } catch (err) {
     console.error(`[SSE] Error sending updates:`, err.message);
+  }
+}
+
+function broadcastToClients() {
+  for (const [connectionId, client] of connections.entries()) {
+    if (client.res.writableEnded) {
+      connections.delete(connectionId);
+      continue;
+    }
+    sendUpdates(client);
+  }
+}
+
+function heartbeatClients() {
+  for (const [connectionId, client] of connections.entries()) {
+    if (client.res.writableEnded) {
+      connections.delete(connectionId);
+      continue;
+    }
+    client.res.write(`: keepalive\n\n`);
   }
 }
 
@@ -236,9 +252,12 @@ app.get('/api/debug/state', (req, res) => {
       return acc;
     }, {}),
     trades: Object.keys(liveState.trades).reduce((acc, coin) => {
-      acc[coin] = Object.keys(liveState.trades[coin]).reduce((botAcc, bot) => {
-        botAcc[bot] = liveState.trades[coin][bot].length;
-        return botAcc;
+      acc[coin] = Object.keys(liveState.trades[coin]).reduce((durAcc, dur) => {
+        durAcc[dur] = Object.keys(liveState.trades[coin][dur]).reduce((botAcc, bot) => {
+          botAcc[bot] = liveState.trades[coin][dur][bot].length;
+          return botAcc;
+        }, {});
+        return durAcc;
       }, {});
       return acc;
     }, {}),
@@ -282,6 +301,9 @@ app.listen(PORT, () => {
   console.log(`[SSE] Health check: http://localhost:${PORT}/health`);
   console.log(`[SSE] Metrics: http://localhost:${PORT}/api/metrics`);
 });
+
+setInterval(broadcastToClients, BROADCAST_INTERVAL);
+setInterval(heartbeatClients, HEARTBEAT_INTERVAL);
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

@@ -51,6 +51,14 @@
       "durations": [300]
     },
     {
+      "address": "0xd84c2b6d65dc596f49c7b6aadd6d74ca91e407b9",
+      "name": "BoneReader",
+      "color": "#84cc16",
+      "description": "Multi-duration crypto prediction trader active across 5-minute, 15-minute, and hourly markets.",
+      "profileUrl": "https://polymarket.com/@BoneReader",
+      "durations": [300, 900, 3600]
+    },
+    {
       "address": "0x0f863d92dd2b960e3eb6a23a35fd92a91981404e",
       "name": "Qualitative",
       "color": "#06b6d4",
