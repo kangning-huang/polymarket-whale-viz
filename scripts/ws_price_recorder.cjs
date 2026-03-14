@@ -227,7 +227,7 @@ function closeExpiredStreams() {
 const HOURLY_SERIES = {
   btc: "btc-up-or-down-hourly",
   eth: "eth-up-or-down-hourly",
-  sol: "sol-up-or-down-hourly",
+  sol: "solana-up-or-down-hourly",
   xrp: "xrp-up-or-down-hourly",
 };
 

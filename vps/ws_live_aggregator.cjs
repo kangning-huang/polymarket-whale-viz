@@ -295,7 +295,7 @@ function getEventSlugPrefix(coin, duration) {
     const hourlyPrefixes = {
       'btc': 'btc-up-or-down-hourly',
       'eth': 'eth-up-or-down-hourly',
-      'sol': 'sol-up-or-down-hourly',
+      'sol': 'solana-up-or-down-hourly',
       'xrp': 'xrp-up-or-down-hourly',
     };
     return hourlyPrefixes[coin] || `${coin}-up-or-down-hourly`;
