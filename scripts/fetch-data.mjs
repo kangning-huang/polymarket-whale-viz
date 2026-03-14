@@ -134,7 +134,7 @@ function downloadPriceFiles() {
   console.log(`\nDownloading prices from VPS ${VPS_HOST}...`);
   try {
     execSync(
-      `rsync -avz --ignore-existing -e "ssh -i ${VPS_SSH_KEY} -o StrictHostKeyChecking=no" ` +
+      `rsync -avz -e "ssh -i ${VPS_SSH_KEY} -o StrictHostKeyChecking=no" ` +
       `root@${VPS_HOST}:${VPS_PRICES_PATH} ${PRICES_DIR}/`,
       { stdio: 'pipe', timeout: 60000 }
     );
@@ -506,6 +506,11 @@ async function main() {
   // Ensure output dirs
   mkdirSync(WINDOWS_DIR, { recursive: true });
   mkdirSync(PRICES_DIR, { recursive: true });
+
+  // Remove stale window detail files so the manifest matches the uploaded artifact.
+  for (const file of readdirSync(WINDOWS_DIR)) {
+    if (file.endsWith('.json')) unlinkSync(join(WINDOWS_DIR, file));
+  }
 
   // Step 0: Download VPS price files
   downloadPriceFiles();
