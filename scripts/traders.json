@@ -67,6 +67,14 @@
       "profileUrl": "https://polymarket.com/@Qualitative",
       "screenshot": "qualitative_pnl.png",
       "durations": [300, 900, 3600]
+    },
+    {
+      "address": "0x4b188496d1b3da1716165380999afb9b314c725f",
+      "name": "blue-walnut",
+      "color": "#f472b6",
+      "description": "Crypto prediction trader competing across multiple market durations on Polymarket.",
+      "profileUrl": "https://polymarket.com/@blue-walnut",
+      "durations": [300, 900, 3600]
     }
   ],
   "coins": ["btc", "eth", "sol", "xrp"],
