@@ -12,6 +12,9 @@ import SEOHead from './components/SEOHead';
 
 const BotLeaderboard = lazy(() => import('./components/BotLeaderboard'));
 const BlogPost = lazy(() => import('./components/BlogPost'));
+const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
+const AboutPage = lazy(() => import('./components/AboutPage'));
+const ContactPage = lazy(() => import('./components/ContactPage'));
 
 /* ── Scroll-reveal wrapper ─────────────────────────────────── */
 function Reveal({
@@ -234,7 +237,12 @@ function Landing() {
           </Reveal>
 
           {/* ── Footer ── */}
-          <Reveal className="mt-16 pt-6 pb-8 border-t border-border text-center" y={20}>
+          <Reveal className="mt-16 pt-6 pb-8 border-t border-border text-center space-y-3" y={20}>
+            <div className="flex justify-center gap-4 text-xs">
+              <button onClick={() => navigate('/about')} className="text-text-muted hover:text-accent transition-colors">About</button>
+              <button onClick={() => navigate('/privacy')} className="text-text-muted hover:text-accent transition-colors">Privacy Policy</button>
+              <button onClick={() => navigate('/contact')} className="text-text-muted hover:text-accent transition-colors">Contact</button>
+            </div>
             <p className="text-text-muted text-xs">
               Data sourced from Polymarket CLOB. Not financial advice.
             </p>
@@ -391,6 +399,9 @@ export default function App() {
       <Route path="/bot/:name" element={<BotPageRoute />} />
       <Route path="/leaderboard" element={<SuspenseWrapper><BotLeaderboard /></SuspenseWrapper>} />
       <Route path="/blog/how-polymarket-bots-trade" element={<SuspenseWrapper><BlogPost /></SuspenseWrapper>} />
+      <Route path="/privacy" element={<SuspenseWrapper><PrivacyPolicy /></SuspenseWrapper>} />
+      <Route path="/about" element={<SuspenseWrapper><AboutPage /></SuspenseWrapper>} />
+      <Route path="/contact" element={<SuspenseWrapper><ContactPage /></SuspenseWrapper>} />
       <Route path="/bot/:name/:ts/:coin" element={<LegacyBotWindowRedirect />} />
       <Route path="/window/:ts/:coin" element={<LegacyRedirect />} />
     </Routes>
